@@ -1,0 +1,6 @@
+{
+  "name": "Watchman - Partner Prayer & Testimony Tracker",
+  "description": "An analytical prayer accountability tracker for partners to log prayer hours and minutes against daily, weekly, and period targets (e.g. 100 hours), document prayer sessions, and keep a testimony record.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

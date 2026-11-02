@@ -1,0 +1,119 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Validation helpers
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.displayName is string && data.displayName.size() <= 128;
+    }
+
+    function isValidPartnership(data) {
+      return data.name is string && data.name.size() <= 128 &&
+             data.createdBy is string && data.createdBy.size() <= 128 &&
+             data.memberUids is list && data.memberUids.size() <= 50 &&
+             data.memberEmails is list && data.memberEmails.size() <= 50 &&
+             data.dailyTargetMinutes is number && data.dailyTargetMinutes >= 0 &&
+             data.weeklyTargetMinutes is number && data.weeklyTargetMinutes >= 0 &&
+             data.periodTargetMinutes is number && data.periodTargetMinutes >= 0;
+    }
+
+    function isValidSession(data) {
+      return data.partnershipId is string && data.partnershipId.size() <= 128 &&
+             data.authorUid is string && data.authorUid.size() <= 128 &&
+             data.durationMinutes is number && data.durationMinutes > 0 && data.durationMinutes <= 1440 &&
+             data.category is string && data.category.size() <= 64 &&
+             data.notes is string && data.notes.size() <= 4096;
+    }
+
+    function isValidTestimony(data) {
+      return data.partnershipId is string && data.partnershipId.size() <= 128 &&
+             data.authorUid is string && data.authorUid.size() <= 128 &&
+             data.title is string && data.title.size() <= 256 &&
+             data.prayerBurden is string && data.prayerBurden.size() <= 2048 &&
+             data.answeredDetail is string && data.answeredDetail.size() <= 4096;
+    }
+
+    function isValidRequest(data) {
+      return data.partnershipId is string && data.partnershipId.size() <= 128 &&
+             data.authorUid is string && data.authorUid.size() <= 128 &&
+             data.title is string && data.title.size() <= 256 &&
+             data.status is string && data.status.size() <= 32;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get, list: if isSignedIn();
+      allow create, update: if isOwner(userId) && isValidUser(incoming());
+      allow delete: if false;
+    }
+
+    // Partnerships Collection
+    match /partnerships/{partnershipId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && incoming().createdBy == request.auth.uid && isValidPartnership(incoming());
+      allow update: if isSignedIn() && (
+        request.auth.uid in existing().memberUids ||
+        (request.auth.token.email != null && request.auth.token.email.lower() in existing().memberEmails) ||
+        existing().createdBy == request.auth.uid
+      ) && isValidPartnership(incoming());
+      allow delete: if isSignedIn() && existing().createdBy == request.auth.uid;
+
+      // Subcollection: Prayer Sessions
+      match /sessions/{sessionId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && incoming().authorUid == request.auth.uid && isValidSession(incoming());
+        allow update: if isSignedIn() && existing().authorUid == request.auth.uid && isValidSession(incoming());
+        allow delete: if isSignedIn() && existing().authorUid == request.auth.uid;
+      }
+
+      // Subcollection: Testimonies
+      match /testimonies/{testimonyId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && incoming().authorUid == request.auth.uid && isValidTestimony(incoming());
+        // Partners can increment amensCount / amenUids; author can update testimony content
+        allow update: if isSignedIn() && (
+          existing().authorUid == request.auth.uid ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['amensCount', 'amenUids'])
+        );
+        allow delete: if isSignedIn() && existing().authorUid == request.auth.uid;
+      }
+
+      // Subcollection: Prayer Requests
+      match /requests/{requestId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && incoming().authorUid == request.auth.uid && isValidRequest(incoming());
+        // Partners can update status / answeredTestimonyId; author can update request details
+        allow update: if isSignedIn();
+        allow delete: if isSignedIn() && existing().authorUid == request.auth.uid;
+      }
+    }
+  }
+}

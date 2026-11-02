@@ -1,0 +1,123 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile for prayer tracking",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "photoURL": { "type": "string", "maxLength": 512 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "displayName"]
+    },
+    "Partnership": {
+      "title": "Partnership",
+      "description": "Accountability covenant connecting two or more prayer partners",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "memberUids": { "type": "array" },
+        "memberEmails": { "type": "array" },
+        "memberNames": { "type": "array" },
+        "dailyTargetMinutes": { "type": "number" },
+        "weeklyTargetMinutes": { "type": "number" },
+        "periodTitle": { "type": "string", "maxLength": 128 },
+        "periodTargetMinutes": { "type": "number" },
+        "periodStartDate": { "type": "string", "maxLength": 32 },
+        "periodEndDate": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "createdBy", "memberUids", "memberEmails", "dailyTargetMinutes", "weeklyTargetMinutes", "periodTargetMinutes"]
+    },
+    "PrayerSession": {
+      "title": "PrayerSession",
+      "description": "Individual or joint prayer encounter logged by a member of the partnership",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "partnershipId": { "type": "string", "maxLength": 128 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 32 },
+        "startTime": { "type": "string", "maxLength": 32 },
+        "durationMinutes": { "type": "number" },
+        "category": { "type": "string", "maxLength": 64 },
+        "topics": { "type": "array" },
+        "notes": { "type": "string", "maxLength": 4096 },
+        "scripture": { "type": "string", "maxLength": 256 },
+        "participantNames": { "type": "array" },
+        "wasTogether": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "partnershipId", "authorUid", "authorName", "date", "durationMinutes", "category", "notes"]
+    },
+    "Testimony": {
+      "title": "Testimony",
+      "description": "Permanent memorial of God's answered prayer within the partnership",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "partnershipId": { "type": "string", "maxLength": 128 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "date": { "type": "string", "maxLength": 32 },
+        "category": { "type": "string", "maxLength": 64 },
+        "prayerBurden": { "type": "string", "maxLength": 2048 },
+        "answeredDetail": { "type": "string", "maxLength": 4096 },
+        "scripturePraise": { "type": "string", "maxLength": 256 },
+        "amensCount": { "type": "number" },
+        "amenUids": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "partnershipId", "authorUid", "authorName", "title", "date", "category", "prayerBurden", "answeredDetail"]
+    },
+    "PrayerRequest": {
+      "title": "PrayerRequest",
+      "description": "Active intercessory request on the altar",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "partnershipId": { "type": "string", "maxLength": 128 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "status": { "type": "string", "maxLength": 32 },
+        "category": { "type": "string", "maxLength": 64 },
+        "dateAdded": { "type": "string", "maxLength": 32 },
+        "assignedPartner": { "type": "string", "maxLength": 128 },
+        "notes": { "type": "string", "maxLength": 2048 },
+        "answeredTestimonyId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "partnershipId", "authorUid", "authorName", "title", "status", "category", "dateAdded"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles indexed by UID"
+    },
+    "/partnerships/{partnershipId}": {
+      "schema": "Partnership",
+      "description": "Prayer accountability partnerships and covenant targets"
+    },
+    "/partnerships/{partnershipId}/sessions/{sessionId}": {
+      "schema": "PrayerSession",
+      "description": "Documented prayer encounters and minutes logged"
+    },
+    "/partnerships/{partnershipId}/testimonies/{testimonyId}": {
+      "schema": "Testimony",
+      "description": "Praise reports and answered prayers"
+    },
+    "/partnerships/{partnershipId}/requests/{requestId}": {
+      "schema": "PrayerRequest",
+      "description": "Active intercession requests on the altar"
+    }
+  }
+}
