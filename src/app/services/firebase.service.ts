@@ -87,6 +87,29 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
+/**
+ * Recursively strips undefined keys from any object or array so Firestore setDoc/updateDoc
+ * will never fail with "Unsupported field value: undefined".
+ */
+export function removeUndefinedFields<T>(val: T): T {
+  if (val === null || val === undefined) {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    return val.map((item) => removeUndefinedFields(item)) as unknown as T;
+  }
+  if (typeof val === 'object' && !(val instanceof Date)) {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(val)) {
+      if (value !== undefined) {
+        result[key] = removeUndefinedFields(value);
+      }
+    }
+    return result as T;
+  }
+  return val;
+}
+
 @Injectable({
   providedIn: 'root',
 })
@@ -167,10 +190,10 @@ export class FirebaseService {
         uid: user.uid,
         email: user.email || '',
         displayName: user.displayName || user.email?.split('@')[0] || 'Intercessor',
-        photoURL: user.photoURL || undefined,
+        photoURL: user.photoURL || '',
         createdAt: new Date().toISOString(),
       };
-      await setDoc(doc(db, 'users', user.uid), profileData, { merge: true });
+      await setDoc(doc(db, 'users', user.uid), removeUndefinedFields(profileData), { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, userPath);
     }
@@ -357,7 +380,7 @@ export class FirebaseService {
     };
 
     try {
-      await setDoc(doc(db, 'partnerships', pId), newPartnership);
+      await setDoc(doc(db, 'partnerships', pId), removeUndefinedFields(newPartnership));
       this.selectPartnership(pId);
       return pId;
     } catch (err) {
@@ -429,25 +452,39 @@ export class FirebaseService {
 
     const categories = sessionData.categories && sessionData.categories.length > 0
       ? sessionData.categories
-      : [sessionData.category];
+      : [sessionData.category || 'Thanksgiving & Praise'];
 
-    const newSession: PrayerSession = {
-      ...sessionData,
+    const newSession: Record<string, unknown> = {
       id: sId,
       partnershipId: pId,
       authorUid: user.uid,
       authorName: user.displayName || user.email?.split('@')[0] || 'Partner',
+      date: sessionData.date,
+      durationMinutes: sessionData.durationMinutes,
       category: categories[0] || 'Thanksgiving & Praise',
       categories,
       topics: sessionData.topics || [],
+      notes: sessionData.notes || '',
       participantNames: sessionData.participantNames || [],
-      linkedTestimonyId: sessionData.linkedTestimonyId || undefined,
-      linkedTestimonyTitle: sessionData.linkedTestimonyTitle || undefined,
+      wasTogether: !!sessionData.wasTogether,
       createdAt: new Date().toISOString(),
     };
 
+    if (sessionData.startTime) {
+      newSession['startTime'] = sessionData.startTime;
+    }
+    if (sessionData.scripture) {
+      newSession['scripture'] = sessionData.scripture;
+    }
+    if (sessionData.linkedTestimonyId) {
+      newSession['linkedTestimonyId'] = sessionData.linkedTestimonyId;
+    }
+    if (sessionData.linkedTestimonyTitle) {
+      newSession['linkedTestimonyTitle'] = sessionData.linkedTestimonyTitle;
+    }
+
     try {
-      await setDoc(doc(db, 'partnerships', pId, 'sessions', sId), newSession);
+      await setDoc(doc(db, 'partnerships', pId, 'sessions', sId), removeUndefinedFields(newSession));
       return sId;
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, sPath);
@@ -462,23 +499,25 @@ export class FirebaseService {
 
     const categories = session.categories && session.categories.length > 0
       ? session.categories
-      : [session.category];
+      : [session.category || 'Thanksgiving & Praise'];
+
+    const updatedData: Record<string, unknown> = {
+      date: session.date,
+      startTime: session.startTime || '',
+      durationMinutes: session.durationMinutes,
+      category: categories[0] || 'Thanksgiving & Praise',
+      categories,
+      topics: session.topics || [],
+      notes: session.notes || '',
+      scripture: session.scripture || '',
+      participantNames: session.participantNames || [],
+      wasTogether: !!session.wasTogether,
+      linkedTestimonyId: session.linkedTestimonyId || null,
+      linkedTestimonyTitle: session.linkedTestimonyTitle || null,
+    };
 
     try {
-      await updateDoc(doc(db, 'partnerships', pId, 'sessions', session.id), {
-        date: session.date,
-        startTime: session.startTime || '',
-        durationMinutes: session.durationMinutes,
-        category: categories[0] || 'Thanksgiving & Praise',
-        categories,
-        topics: session.topics || [],
-        notes: session.notes || '',
-        scripture: session.scripture || '',
-        participantNames: session.participantNames || [],
-        wasTogether: !!session.wasTogether,
-        linkedTestimonyId: session.linkedTestimonyId || null,
-        linkedTestimonyTitle: session.linkedTestimonyTitle || null,
-      });
+      await updateDoc(doc(db, 'partnerships', pId, 'sessions', session.id), removeUndefinedFields(updatedData));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, sPath);
     }
@@ -509,24 +548,33 @@ export class FirebaseService {
 
     const categories = testimonyData.categories && testimonyData.categories.length > 0
       ? testimonyData.categories
-      : [testimonyData.category];
+      : [testimonyData.category || 'Thanksgiving & Praise'];
 
-    const newTestimony: Testimony = {
-      ...testimonyData,
+    const newTestimony: Record<string, unknown> = {
       id: tId,
       partnershipId: pId,
       authorUid: user.uid,
       authorName: user.displayName || user.email?.split('@')[0] || 'Partner',
+      title: testimonyData.title,
+      date: testimonyData.date,
       category: categories[0] || 'Thanksgiving & Praise',
       categories,
+      prayerBurden: testimonyData.prayerBurden || '',
+      answeredDetail: testimonyData.answeredDetail || '',
       amensCount: 1,
       amenUids: [user.uid],
-      linkedSessionId: testimonyData.linkedSessionId || undefined,
       createdAt: new Date().toISOString(),
     };
 
+    if (testimonyData.scripturePraise) {
+      newTestimony['scripturePraise'] = testimonyData.scripturePraise;
+    }
+    if (testimonyData.linkedSessionId) {
+      newTestimony['linkedSessionId'] = testimonyData.linkedSessionId;
+    }
+
     try {
-      await setDoc(doc(db, 'partnerships', pId, 'testimonies', tId), newTestimony);
+      await setDoc(doc(db, 'partnerships', pId, 'testimonies', tId), removeUndefinedFields(newTestimony));
 
       // If linked to an existing prayer session, update the session with this testimony's ID and title
       if (testimonyData.linkedSessionId) {
@@ -547,19 +595,21 @@ export class FirebaseService {
 
     const categories = testimony.categories && testimony.categories.length > 0
       ? testimony.categories
-      : [testimony.category];
+      : [testimony.category || 'Thanksgiving & Praise'];
+
+    const updatedData: Record<string, unknown> = {
+      title: testimony.title,
+      date: testimony.date,
+      category: categories[0] || 'Thanksgiving & Praise',
+      categories,
+      prayerBurden: testimony.prayerBurden || '',
+      answeredDetail: testimony.answeredDetail || '',
+      scripturePraise: testimony.scripturePraise || '',
+      linkedSessionId: testimony.linkedSessionId || null,
+    };
 
     try {
-      await updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimony.id), {
-        title: testimony.title,
-        date: testimony.date,
-        category: categories[0] || 'Thanksgiving & Praise',
-        categories,
-        prayerBurden: testimony.prayerBurden,
-        answeredDetail: testimony.answeredDetail,
-        scripturePraise: testimony.scripturePraise || '',
-        linkedSessionId: testimony.linkedSessionId || null,
-      });
+      await updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimony.id), removeUndefinedFields(updatedData));
 
       // If linked to session, also update the session's cached title
       if (testimony.linkedSessionId) {
@@ -643,17 +693,31 @@ export class FirebaseService {
     const rId = 'req-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
     const rPath = `partnerships/${pId}/requests/${rId}`;
 
-    const newRequest: PrayerRequest = {
-      ...requestData,
+    const categories = requestData.categories && requestData.categories.length > 0
+      ? requestData.categories
+      : [requestData.category || 'Intercession & Nations'];
+
+    const newRequest: Record<string, unknown> = {
       id: rId,
       partnershipId: pId,
       authorUid: user.uid,
       authorName: user.displayName || user.email?.split('@')[0] || 'Partner',
+      title: requestData.title,
+      status: requestData.status || 'active',
+      category: categories[0] || 'Intercession & Nations',
+      categories,
+      dateAdded: requestData.dateAdded || this.getTodayDateString(),
+      assignedPartner: requestData.assignedPartner || 'All Partners (Shared Agreement)',
+      notes: requestData.notes || '',
       createdAt: new Date().toISOString(),
     };
 
+    if (requestData.answeredTestimonyId) {
+      newRequest['answeredTestimonyId'] = requestData.answeredTestimonyId;
+    }
+
     try {
-      await setDoc(doc(db, 'partnerships', pId, 'requests', rId), newRequest);
+      await setDoc(doc(db, 'partnerships', pId, 'requests', rId), removeUndefinedFields(newRequest));
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, rPath);
     }
@@ -663,15 +727,23 @@ export class FirebaseService {
     const pId = this.activePartnershipId();
     if (!pId) return;
     const rPath = `partnerships/${pId}/requests/${request.id}`;
+
+    const categories = request.categories && request.categories.length > 0
+      ? request.categories
+      : [request.category || 'Intercession & Nations'];
+
+    const updatedData: Record<string, unknown> = {
+      title: request.title,
+      status: request.status,
+      category: categories[0] || 'Intercession & Nations',
+      categories,
+      assignedPartner: request.assignedPartner,
+      notes: request.notes || '',
+      answeredTestimonyId: request.answeredTestimonyId || null,
+    };
+
     try {
-      await updateDoc(doc(db, 'partnerships', pId, 'requests', request.id), {
-        title: request.title,
-        status: request.status,
-        category: request.category,
-        assignedPartner: request.assignedPartner,
-        notes: request.notes,
-        answeredTestimonyId: request.answeredTestimonyId || null,
-      });
+      await updateDoc(doc(db, 'partnerships', pId, 'requests', request.id), removeUndefinedFields(updatedData));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, rPath);
     }

@@ -15,6 +15,25 @@ const angularApp = new AngularNodeAppEngine();
 app.use(express.json());
 
 /**
+ * Production Security Headers: Prevent clickjacking, MIME sniffing, and referrer leaks
+ */
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
+/**
+ * Health check endpoint for Render/Cloud health monitoring
+ */
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+});
+
+
+/**
  * Express Rest API endpoints
  */
 app.post('/api/prayer-assist', async (req, res) => {

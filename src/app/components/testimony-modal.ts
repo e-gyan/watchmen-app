@@ -283,7 +283,7 @@ export class TestimonyModal implements OnInit {
           categories: cats,
           prayerBurden: val.prayerBurden.trim(),
           answeredDetail: val.answeredDetail.trim(),
-          scripturePraise: val.scripturePraise.trim() || undefined,
+          scripturePraise: val.scripturePraise.trim(),
         });
       } else {
         await this.firebaseService.addTestimony({
@@ -293,8 +293,8 @@ export class TestimonyModal implements OnInit {
           categories: cats,
           prayerBurden: val.prayerBurden.trim(),
           answeredDetail: val.answeredDetail.trim(),
-          scripturePraise: val.scripturePraise.trim() || undefined,
-          linkedSessionId: this.linkedSessionId() || undefined,
+          scripturePraise: val.scripturePraise.trim(),
+          linkedSessionId: this.linkedSessionId() || '',
         });
       }
 
