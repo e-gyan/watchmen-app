@@ -96,26 +96,35 @@ In the Render Web Service setup (or under the **Environment** tab of your servic
 
 ---
 
-### Step 4: Authorize Render Domain in Firebase Authentication
-To allow users to sign in with Google from your live Render app:
-1. Open the [Firebase Console](https://console.firebase.google.com/).
-2. Select your project: `gen-lang-client-0412977179` (or custom project).
-3. Navigate to **Authentication** > **Settings** > **Authorized domains**.
-4. Click **Add domain**.
-5. Paste your Render service URL (e.g., `watchman-prayer-partner.onrender.com` — without `https://`).
-6. Click **Save**.
+### Step 4: Signing In on Render (Two Built-In Options)
+
+When you first deploy to Render (`https://your-app.onrender.com`), Firebase's Google OAuth Popup restricts sign-in to pre-authorized domains (`auth/unauthorized-domain`). We have provided **two ways** to sign in on Render:
+
+#### Option A: Instant Direct Partner Sign-In (Works Immediately on Render)
+1. Click **Sign In** (or **Sign In with Email**) on your live Render app.
+2. Enter your **Google / Partner Email** (e.g., `you@gmail.com`) and **Your Name**.
+3. Click **Sign In with Email**.
+4. Your prayer circles, sessions, testimonies, and prayer requests automatically sync across partners on your Render server (`/api/cloud-sync`) and local backup without needing any console changes.
+
+#### Option B: Authorize Your Render Domain for Google OAuth Popup
+To enable 1-click Google Popup/Redirect login on Render:
+1. Open the [Firebase Console Authentication Settings](https://console.firebase.google.com/project/gen-lang-client-0412977179/authentication/settings).
+2. Select project: `gen-lang-client-0412977179` (or your custom Firebase project).
+3. Go to **Authentication** &rarr; **Settings** &rarr; **Authorized domains**.
+4. Click **Add domain** and paste your Render hostname (e.g., `watchman-prayer-partner.onrender.com` — without `https://`).
+5. Click **Add**. Google Popup and Redirect sign-in will now work immediately on Render.
 
 ---
 
 ### Step 5: Deploy & Verify
-1. Click **Create Web Service** on Render.
+1. Click **Create Web Service** (or **Manual Deploy** &rarr; **Deploy latest commit**) on Render.
 2. Render will run:
    - `npm install`
    - `npm run build`
    - `npm start`
-3. Once the build finishes and the health check responds with `200 OK`, click on your live Render URL.
+3. Once the build finishes and `/api/health` responds with `200 OK`, open your live Render URL.
 4. Test:
-   - Google Sign-in.
+   - Signing in via **Sign In with Email** or **Sign In with Google**.
    - Creating a partnership or adding prayer partner emails.
    - Logging a prayer session with hours, minutes, and topics.
    - Generating scripture recommendations via the AI prayer assist button.

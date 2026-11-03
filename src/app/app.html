@@ -1,144 +1,76 @@
 <div class="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans">
-  <!-- Top Navigation Bar -->
-  <header class="sticky top-0 z-40 bg-stone-950/90 backdrop-blur-md border-b border-stone-800/80 px-4 sm:px-8 py-3.5 flex items-center justify-between gap-4">
-    <!-- Zone 1: Wordmark & Brand -->
-    <button
-      type="button"
-      (click)="setTab('dashboard')"
-      class="text-left group flex items-center gap-2.5 whitespace-nowrap shrink-0 focus:outline-none"
-    >
-      <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-colors">
-        <mat-icon style="font-size: 20px;">local_fire_department</mat-icon>
-      </div>
-      <div>
-        <span class="text-base sm:text-lg font-serif font-bold tracking-tight text-stone-100 group-hover:text-amber-400 transition-colors">
-          WATCHMAN
-        </span>
-        <span class="hidden md:inline text-xs text-stone-500 ml-2">Prayer & Testimony Altar</span>
-      </div>
-    </button>
-
-    <!-- Zone 2: Nav Tabs -->
-    <nav class="hidden lg:flex items-center gap-1 text-xs font-medium">
+  <!-- Top Navigation Bar (Horizontally scrollable, zero overlap) -->
+  <header class="sticky top-0 z-40 w-full bg-stone-950/95 backdrop-blur-md border-b border-stone-800/80 px-4 sm:px-6 py-3 overflow-x-auto">
+    <div class="flex items-center justify-between gap-4 min-w-max mx-auto max-w-7xl">
+      <!-- Zone 1: Wordmark & Brand -->
       <button
         type="button"
         (click)="setTab('dashboard')"
-        class="px-3.5 py-2 rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5"
-        [class]="
-          activeTab() === 'dashboard'
-            ? 'bg-stone-800 text-amber-400 font-semibold shadow-sm'
-            : 'text-stone-400 hover:text-stone-100 hover:bg-stone-900'
-        "
+        class="text-left group flex items-center gap-2 whitespace-nowrap shrink-0 focus:outline-none"
       >
-        <mat-icon style="font-size: 16px;">dashboard</mat-icon>
-        <span>Dashboard & Goals</span>
-      </button>
-
-      <button
-        type="button"
-        (click)="setTab('sanctuary')"
-        class="px-3.5 py-2 rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5"
-        [class]="
-          activeTab() === 'sanctuary'
-            ? 'bg-stone-800 text-amber-400 font-semibold shadow-sm'
-            : 'text-stone-400 hover:text-stone-100 hover:bg-stone-900'
-        "
-      >
-        <mat-icon style="font-size: 16px;">timer</mat-icon>
-        <span>Live Sanctuary</span>
-      </button>
-
-      <button
-        type="button"
-        (click)="setTab('journal')"
-        class="px-3.5 py-2 rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5"
-        [class]="
-          activeTab() === 'journal'
-            ? 'bg-stone-800 text-amber-400 font-semibold shadow-sm'
-            : 'text-stone-400 hover:text-stone-100 hover:bg-stone-900'
-        "
-      >
-        <mat-icon style="font-size: 16px;">menu_book</mat-icon>
-        <span>Session Journal</span>
-      </button>
-
-      <button
-        type="button"
-        (click)="setTab('testimonies')"
-        class="px-3.5 py-2 rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5"
-        [class]="
-          activeTab() === 'testimonies'
-            ? 'bg-stone-800 text-amber-400 font-semibold shadow-sm'
-            : 'text-stone-400 hover:text-stone-100 hover:bg-stone-900'
-        "
-      >
-        <mat-icon style="font-size: 16px;">celebration</mat-icon>
-        <span>Testimonies ({{ firebaseService.testimonies().length }})</span>
-      </button>
-
-      <button
-        type="button"
-        (click)="setTab('covenant')"
-        class="px-3.5 py-2 rounded-xl transition-all whitespace-nowrap shrink-0 flex items-center gap-1.5"
-        [class]="
-          activeTab() === 'covenant'
-            ? 'bg-stone-800 text-amber-400 font-semibold shadow-sm'
-            : 'text-stone-400 hover:text-stone-100 hover:bg-stone-900'
-        "
-      >
-        <mat-icon style="font-size: 16px;">handshake</mat-icon>
-        <span>Covenant & Requests</span>
-      </button>
-    </nav>
-
-    <!-- Zone 3: Account & Primary CTA -->
-    <div class="flex items-center gap-2.5 shrink-0">
-      @if (firebaseService.isAuthenticated()) {
-        <!-- User avatar / profile button -->
-        <div class="flex items-center gap-2 pr-1 border-r border-stone-800">
-          <div
-            class="w-8 h-8 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center text-xs font-bold"
-            [title]="firebaseService.currentUser()?.email"
-          >
-            {{ currentUserName().slice(0, 1).toUpperCase() }}
-          </div>
-          <span class="hidden xl:inline text-xs font-medium text-stone-200">
-            {{ currentUserName() }}
+        <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-colors shrink-0">
+          <mat-icon style="font-size: 20px;">local_fire_department</mat-icon>
+        </div>
+        <div class="shrink-0">
+          <span class="text-base sm:text-lg font-serif font-bold tracking-tight text-stone-100 group-hover:text-amber-400 transition-colors">
+            WATCHMAN
           </span>
+          <span class="hidden xl:inline text-xs text-stone-500 ml-1.5">Prayer Altar</span>
+        </div>
+      </button>
+
+      <!-- Account, Theme & Primary CTA -->
+      <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
+        <!-- Theme Toggle Component -->
+        <app-theme-toggle class="shrink-0" />
+
+        @if (firebaseService.isAuthenticated()) {
+          <!-- User avatar / profile button -->
+          <div class="flex items-center gap-1.5 pr-1 border-r border-stone-800 shrink-0">
+            <div
+              class="w-7 h-7 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center text-xs font-bold shrink-0"
+              [title]="firebaseService.currentUser()?.email"
+            >
+              {{ currentUserName().slice(0, 1).toUpperCase() }}
+            </div>
+            <span class="hidden sm:inline text-xs font-medium text-stone-200 max-w-[120px] truncate">
+              {{ currentUserName() }}
+            </span>
+            <button
+              type="button"
+              (click)="signOut()"
+              class="p-1.5 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-lg transition-colors shrink-0"
+              title="Sign Out"
+              aria-label="Sign Out"
+            >
+              <mat-icon style="font-size: 18px;">logout</mat-icon>
+            </button>
+          </div>
+        } @else {
           <button
             type="button"
-            (click)="signOut()"
-            class="p-1.5 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-lg transition-colors"
-            title="Sign Out"
-            aria-label="Sign Out"
+            (click)="openSignInModal()"
+            class="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-700 transition-colors shrink-0"
           >
-            <mat-icon style="font-size: 18px;">logout</mat-icon>
+            <mat-icon style="font-size: 16px;">account_circle</mat-icon>
+            <span>Sign In</span>
           </button>
-        </div>
-      } @else {
+        }
+
         <button
           type="button"
-          (click)="signInWithGoogle()"
-          class="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-700 transition-colors shrink-0"
+          (click)="openNewSessionModal()"
+          class="flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-md whitespace-nowrap shrink-0"
         >
-          <mat-icon style="font-size: 16px;">account_circle</mat-icon>
-          <span>Sign In</span>
+          <mat-icon style="font-size: 18px;">add</mat-icon>
+          <span>Log Prayer</span>
         </button>
-      }
-
-      <button
-        type="button"
-        (click)="openNewSessionModal()"
-        class="flex items-center gap-1.5 py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-md whitespace-nowrap shrink-0"
-      >
-        <mat-icon style="font-size: 18px;">add</mat-icon>
-        <span>Log Prayer</span>
-      </button>
+      </div>
     </div>
   </header>
 
-  <!-- Mobile Tab Bar -->
-  <div class="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-t border-stone-800 px-3 py-2 flex items-center justify-around">
+  <!-- Bottom Navigation Bar -->
+  <div class="fixed bottom-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-t border-stone-800 px-3 py-2 flex items-center justify-around">
     <button
       type="button"
       (click)="setTab('dashboard')"
@@ -186,111 +118,113 @@
     </button>
   </div>
 
-  <!-- Workspace Sub-Toolbar: Circle Switcher & Partner Actions -->
+  <!-- Workspace Sub-Toolbar: Circle Switcher & Partner Actions (Horizontally scrollable) -->
   @if (firebaseService.isAuthenticated()) {
-    <div class="bg-stone-900/60 border-b border-stone-800/80 px-4 sm:px-8 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-      <!-- Active Circle selector & Partners -->
-      <div class="flex flex-wrap items-center gap-2">
-        @if (firebaseService.partnerships().length > 0) {
-          <!-- Circle Dropdown/Selector -->
-          <div class="flex items-center gap-1.5 bg-stone-950 border border-stone-800 rounded-lg px-2.5 py-1">
-            <mat-icon class="text-amber-400" style="font-size: 16px;">groups</mat-icon>
-            <span class="text-stone-400 text-xs">Circle:</span>
-            <select
-              [value]="firebaseService.activePartnershipId() || ''"
-              (change)="firebaseService.selectPartnership($any($event.target).value)"
-              class="bg-transparent text-xs font-semibold text-stone-100 focus:outline-none cursor-pointer"
-            >
-              @for (p of firebaseService.partnerships(); track p.id) {
-                <option [value]="p.id" class="bg-stone-900 text-stone-100">{{ p.name }}</option>
-              }
-            </select>
-          </div>
+    <div class="bg-stone-900/60 border-b border-stone-800/80 px-4 sm:px-6 py-2 overflow-x-auto text-xs">
+      <div class="flex items-center justify-between gap-4 min-w-max mx-auto max-w-7xl">
+        <!-- Active Circle selector & Partners -->
+        <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
+          @if (firebaseService.partnerships().length > 0) {
+            <!-- Circle Dropdown/Selector -->
+            <div class="flex items-center gap-1.5 bg-stone-950 border border-stone-800 rounded-lg px-2.5 py-1 shrink-0">
+              <mat-icon class="text-amber-400" style="font-size: 16px;">groups</mat-icon>
+              <span class="text-stone-400 text-xs">Circle:</span>
+              <select
+                [value]="firebaseService.activePartnershipId() || ''"
+                (change)="firebaseService.selectPartnership($any($event.target).value)"
+                class="bg-transparent text-xs font-semibold text-stone-100 focus:outline-none cursor-pointer"
+              >
+                @for (p of firebaseService.partnerships(); track p.id) {
+                  <option [value]="p.id" class="bg-stone-900 text-stone-100">{{ p.name }}</option>
+                }
+              </select>
+            </div>
 
-          <!-- Add Partner button -->
-          <button
-            type="button"
-            (click)="showAddPartnerModal.set(true)"
-            class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 transition-colors"
-            title="Invite another partner to this circle by email"
-          >
-            <mat-icon style="font-size: 14px;">person_add</mat-icon>
-            <span>Add Partner</span>
-          </button>
-        }
-
-        <!-- New Circle Button -->
-        <button
-          type="button"
-          (click)="showCreateCircleModal.set(true)"
-          class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-800/60 hover:bg-stone-800 text-stone-300 border border-stone-700/60 transition-colors"
-        >
-          <mat-icon style="font-size: 14px;">add_circle_outline</mat-icon>
-          <span>New Circle</span>
-        </button>
-
-        <!-- Partner Scope Filter (Combined vs Individual) -->
-        @if (firebaseService.activePartnership()) {
-          <div class="hidden md:flex items-center p-0.5 bg-stone-950 border border-stone-800 rounded-lg ml-2">
+            <!-- Add Partner button -->
             <button
               type="button"
-              (click)="firebaseService.setActiveFilterMember('all')"
-              class="px-2.5 py-1 rounded-md text-xs font-medium transition-all"
-              [class]="
-                firebaseService.activeFilterMember() === 'all'
-                  ? 'bg-stone-800 text-stone-100 shadow-sm'
-                  : 'text-stone-400 hover:text-stone-200'
-              "
+              (click)="showAddPartnerModal.set(true)"
+              class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 transition-colors shrink-0"
+              title="Invite another partner to this circle by email"
             >
-              Combined Circle
+              <mat-icon style="font-size: 14px;">person_add</mat-icon>
+              <span>Add Partner</span>
             </button>
-            @for (email of firebaseService.activePartnership()?.memberEmails || []; track email) {
+          }
+
+          <!-- New Circle Button -->
+          <button
+            type="button"
+            (click)="showCreateCircleModal.set(true)"
+            class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-800/60 hover:bg-stone-800 text-stone-300 border border-stone-700/60 transition-colors shrink-0"
+          >
+            <mat-icon style="font-size: 14px;">add_circle_outline</mat-icon>
+            <span>New Circle</span>
+          </button>
+
+          <!-- Partner Scope Filter (Combined vs Individual) -->
+          @if (firebaseService.activePartnership()) {
+            <div class="flex items-center p-0.5 bg-stone-950 border border-stone-800 rounded-lg ml-1 shrink-0">
               <button
                 type="button"
-                (click)="firebaseService.setActiveFilterMember(email.split('@')[0])"
-                class="px-2.5 py-1 rounded-md text-xs font-medium transition-all truncate max-w-[120px]"
+                (click)="firebaseService.setActiveFilterMember('all')"
+                class="px-2.5 py-1 rounded-md text-xs font-medium transition-all shrink-0"
                 [class]="
-                  firebaseService.activeFilterMember() === email.split('@')[0]
-                    ? 'bg-amber-500/20 text-amber-300 font-semibold shadow-sm'
+                  firebaseService.activeFilterMember() === 'all'
+                    ? 'bg-stone-800 text-stone-100 shadow-sm'
                     : 'text-stone-400 hover:text-stone-200'
                 "
               >
-                {{ email.split('@')[0] }}
+                Combined Circle
               </button>
-            }
+              @for (email of firebaseService.activePartnership()?.memberEmails || []; track email) {
+                <button
+                  type="button"
+                  (click)="firebaseService.setActiveFilterMember(email.split('@')[0])"
+                  class="px-2.5 py-1 rounded-md text-xs font-medium transition-all truncate max-w-[120px] shrink-0"
+                  [class]="
+                    firebaseService.activeFilterMember() === email.split('@')[0]
+                      ? 'bg-amber-500/20 text-amber-300 font-semibold shadow-sm'
+                      : 'text-stone-400 hover:text-stone-200'
+                  "
+                >
+                  {{ email.split('@')[0] }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+
+        <!-- Target Milestone Status & Edit Targets Button -->
+        @if (firebaseService.activePartnership(); as activeP) {
+          <div class="flex items-center gap-3 text-stone-400 shrink-0 whitespace-nowrap">
+            <div class="flex items-center gap-1.5">
+              <span class="text-stone-500">Milestone:</span>
+              <span class="text-stone-200 font-mono tabular-nums font-semibold">
+                {{ firebaseService.formatHours(firebaseService.periodMinutesLogged()) }} / {{ firebaseService.formatHours(activeP.periodTargetMinutes) }} hrs
+              </span>
+              <span class="text-amber-400 font-semibold font-mono tabular-nums">
+                ({{ firebaseService.formatOneDecimal(firebaseService.periodProgressPct()) }}%)
+              </span>
+            </div>
+
+            <button
+              type="button"
+              (click)="showTargetModal.set(true)"
+              class="flex items-center gap-1 text-stone-400 hover:text-stone-200 hover:underline shrink-0"
+              title="Edit target settings"
+            >
+              <mat-icon style="font-size: 14px;">tune</mat-icon>
+              <span>Targets</span>
+            </button>
           </div>
         }
       </div>
-
-      <!-- Target Milestone Status & Edit Targets Button -->
-      @if (firebaseService.activePartnership(); as activeP) {
-        <div class="flex items-center gap-4 text-stone-400">
-          <div class="flex items-center gap-2">
-            <span class="text-stone-500">Milestone:</span>
-            <span class="text-stone-200 font-mono tabular-nums font-semibold">
-              {{ (firebaseService.periodMinutesLogged() / 60).toFixed(1) }} / {{ (activeP.periodTargetMinutes / 60).toFixed(0) }} hrs
-            </span>
-            <span class="text-amber-400 font-semibold">
-              ({{ firebaseService.periodProgressPct() }}%)
-            </span>
-          </div>
-
-          <button
-            type="button"
-            (click)="showTargetModal.set(true)"
-            class="hidden sm:flex items-center gap-1 text-stone-400 hover:text-stone-200 hover:underline"
-            title="Edit target settings"
-          >
-            <mat-icon style="font-size: 14px;">tune</mat-icon>
-            <span>Targets</span>
-          </button>
-        </div>
-      }
     </div>
   }
 
   <!-- Main Container -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-8 mb-16 lg:mb-8">
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-8 mb-20">
     <!-- CASE 1: USER IS NOT AUTHENTICATED -->
     @if (!firebaseService.isAuthenticated()) {
       <div class="max-w-2xl mx-auto my-12 p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 border border-amber-500/30 text-center space-y-6 shadow-2xl">
@@ -309,13 +243,21 @@
           </p>
         </div>
 
-        <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            type="button"
+            (click)="openSignInModal()"
+            class="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-lg"
+          >
+            <mat-icon style="font-size: 20px;">login</mat-icon>
+            <span>Sign In with Email</span>
+          </button>
           <button
             type="button"
             (click)="signInWithGoogle()"
-            class="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-lg"
+            class="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold bg-stone-950 text-stone-100 hover:bg-stone-800 border border-stone-700 active:scale-95 transition-all"
           >
-            <mat-icon style="font-size: 20px;">account_circle</mat-icon>
+            <mat-icon class="text-amber-400" style="font-size: 20px;">account_circle</mat-icon>
             <span>Sign In with Google</span>
           </button>
         </div>
@@ -392,7 +334,7 @@
                       <span>{{ activeP.periodTitle }}</span>
                     </div>
                     <h1 class="text-2xl sm:text-3xl font-serif font-bold text-stone-100 mt-1">
-                      {{ (activeP.periodTargetMinutes / 60).toFixed(0) }}-Hour Prayer Covenant
+                      {{ firebaseService.formatHours(activeP.periodTargetMinutes) }}-Hour Prayer Covenant
                     </h1>
                     <p class="text-xs text-stone-400 mt-1 max-w-2xl leading-relaxed">
                       "Again I say to you, if two of you agree on earth about anything they ask, it will be done for them by my Father in heaven." Standing together across all watches.
@@ -403,14 +345,14 @@
                   <div class="flex items-baseline gap-3 bg-stone-950/80 border border-stone-800 rounded-xl px-5 py-3 shrink-0">
                     <div class="text-right">
                       <div class="text-3xl sm:text-4xl font-serif font-bold text-amber-400 tabular-nums">
-                        {{ (firebaseService.periodMinutesLogged() / 60).toFixed(1) }}
+                        {{ firebaseService.formatHours(firebaseService.periodMinutesLogged()) }}
                       </div>
                       <div class="text-[11px] text-stone-400 uppercase tracking-wider">Hours Logged</div>
                     </div>
                     <div class="text-stone-600 text-2xl font-light">/</div>
                     <div>
                       <div class="text-2xl font-serif font-semibold text-stone-300 tabular-nums">
-                        {{ (activeP.periodTargetMinutes / 60).toFixed(0) }}h
+                        {{ firebaseService.formatHours(activeP.periodTargetMinutes) }}h
                       </div>
                       <div class="text-[11px] text-stone-500 uppercase tracking-wider">Target Goal</div>
                     </div>
@@ -421,10 +363,10 @@
                 <div class="space-y-2">
                   <div class="flex items-center justify-between text-xs">
                     <span class="font-medium text-stone-300">
-                      Target Completion: <strong class="text-amber-400">{{ firebaseService.periodProgressPct() }}%</strong>
+                      Target Completion: <strong class="text-amber-400 font-mono tabular-nums">{{ firebaseService.formatOneDecimal(firebaseService.periodProgressPct()) }}%</strong>
                     </span>
-                    <span class="text-stone-400 tabular-nums">
-                      {{ (firebaseService.periodMinutesRemaining() / 60).toFixed(1) }} hours remaining
+                    <span class="text-stone-400 font-mono tabular-nums">
+                      {{ firebaseService.formatHours(firebaseService.periodMinutesRemaining()) }} hours remaining
                     </span>
                   </div>
 
@@ -443,7 +385,7 @@
                   <div class="space-y-1">
                     <span class="text-stone-500">Pace Required</span>
                     <div class="text-stone-200 font-semibold font-mono tabular-nums text-sm">
-                      {{ firebaseService.pacingAnalysis().requiredDailyMins }} mins / day
+                      {{ firebaseService.formatOneDecimal(firebaseService.pacingAnalysis().requiredDailyMins) }} mins / day
                     </div>
                     <span class="text-[11px] text-stone-500">To reach target by covenant date</span>
                   </div>
@@ -462,8 +404,8 @@
                         </span>
                       }
                     </div>
-                    <span class="text-[11px] text-stone-500">
-                      Avg {{ firebaseService.pacingAnalysis().avgDailyVelocityMinutes }}m/day recently
+                    <span class="text-[11px] text-stone-500 font-mono tabular-nums">
+                      Avg {{ firebaseService.formatOneDecimal(firebaseService.pacingAnalysis().avgDailyVelocityMinutes) }}m/day recently
                     </span>
                   </div>
 
@@ -503,14 +445,14 @@
                   </div>
 
                   <div class="text-right">
-                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    <span class="text-xs font-semibold font-mono tabular-nums px-2 py-0.5 rounded-full"
                       [class]="
                         firebaseService.todayMinutes() >= activeP.dailyTargetMinutes
                           ? 'bg-emerald-500/20 text-emerald-300'
                           : 'bg-amber-500/10 text-amber-400'
                       "
                     >
-                      {{ Math.min(100, Math.round((firebaseService.todayMinutes() / Math.max(1, activeP.dailyTargetMinutes)) * 100)) }}% met
+                      {{ firebaseService.formatPercentage(firebaseService.todayMinutes(), activeP.dailyTargetMinutes) }}% met
                     </span>
                   </div>
                 </div>
@@ -524,12 +466,12 @@
                 </div>
 
                 <div class="flex items-center justify-between text-xs text-stone-500 pt-1">
-                  <span>
-                    {{ firebaseService.todayMinutes() >= activeP.dailyTargetMinutes ? 'Daily target completed' : (activeP.dailyTargetMinutes - firebaseService.todayMinutes()) + ' mins to go today' }}
+                  <span class="tabular-nums">
+                    {{ firebaseService.todayMinutes() >= activeP.dailyTargetMinutes ? 'Daily target completed' : firebaseService.formatOneDecimal(activeP.dailyTargetMinutes - firebaseService.todayMinutes()) + ' mins to go today' }}
                   </span>
                   <button
                     type="button"
-                    (click)="openNewSessionModal(activeP.dailyTargetMinutes)"
+                    (click)="openNewSessionModal(activeP.dailyTargetMinutes, firebaseService.getTodayDateString())"
                     class="text-amber-400 hover:text-amber-300 font-medium"
                   >
                     + Log Today
@@ -557,14 +499,14 @@
                   </div>
 
                   <div class="text-right">
-                    <span class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                    <span class="text-xs font-semibold font-mono tabular-nums px-2 py-0.5 rounded-full"
                       [class]="
                         firebaseService.thisWeekMinutes() >= activeP.weeklyTargetMinutes
                           ? 'bg-emerald-500/20 text-emerald-300'
                           : 'bg-stone-800 text-stone-300'
                       "
                     >
-                      {{ Math.min(100, Math.round((firebaseService.thisWeekMinutes() / Math.max(1, activeP.weeklyTargetMinutes)) * 100)) }}% met
+                      {{ firebaseService.formatPercentage(firebaseService.thisWeekMinutes(), activeP.weeklyTargetMinutes) }}% met
                     </span>
                   </div>
                 </div>
@@ -578,8 +520,8 @@
                 </div>
 
                 <div class="flex items-center justify-between text-xs text-stone-500 pt-1">
-                  <span>
-                    {{ firebaseService.thisWeekMinutes() >= activeP.weeklyTargetMinutes ? 'Weekly covenant achieved!' : (activeP.weeklyTargetMinutes - firebaseService.thisWeekMinutes()) + ' mins remaining' }}
+                  <span class="tabular-nums">
+                    {{ firebaseService.thisWeekMinutes() >= activeP.weeklyTargetMinutes ? 'Weekly covenant achieved!' : firebaseService.formatOneDecimal(activeP.weeklyTargetMinutes - firebaseService.thisWeekMinutes()) + ' mins remaining' }}
                   </span>
                   <button
                     type="button"
@@ -636,14 +578,14 @@
               </div>
             </div>
 
-            <!-- Analytical Charts Row: 7-Day Daily Chart & 8-Week Trend Chart -->
+            <!-- Analytical Charts Row: 5-Day Daily Chart & 2-Week Trend Chart -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <!-- 7-Day Daily Prayer Chart -->
+              <!-- 5-Day Daily Prayer Chart -->
               <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
                 <div class="flex items-center justify-between">
                   <div>
                     <span class="text-xs font-semibold uppercase tracking-wider text-stone-400">
-                      Daily Breakdown (Last 7 Days)
+                      Daily Breakdown (Last 5 Days)
                     </span>
                     <h3 class="text-sm font-semibold text-stone-200">Hours Prayed Per Day</h3>
                   </div>
@@ -653,7 +595,7 @@
                 </div>
 
                 <!-- SVG Bar Chart -->
-                <div class="h-44 w-full flex items-end justify-between gap-2 pt-6 pb-2 px-2 relative border-b border-stone-800">
+                <div class="h-44 w-full flex items-end justify-between gap-3 pt-6 pb-2 px-4 relative border-b border-stone-800">
                   <!-- Target benchmark dashed line -->
                   <div
                     class="absolute left-0 right-0 border-b border-dashed border-amber-500/50 pointer-events-none"
@@ -672,7 +614,7 @@
                         <div class="text-amber-400">Total: {{ firebaseService.formatMinutes(bar.totalMinutes) }}</div>
                       </div>
 
-                      <div class="w-full max-w-[36px] flex flex-col justify-end h-full">
+                      <div class="w-full max-w-[44px] flex flex-col justify-end h-full">
                         @if (bar.totalMinutes > 0) {
                           <div
                             class="w-full rounded-t-md overflow-hidden bg-gradient-to-t from-amber-600 to-amber-400 transition-all duration-300"
@@ -687,21 +629,21 @@
                         {{ bar.dayLabel }}
                       </span>
                       <span class="text-[9px] font-mono text-stone-500 tabular-nums">
-                        {{ Math.floor(bar.totalMinutes / 60) }}h{{ bar.totalMinutes % 60 }}m
+                        {{ firebaseService.formatHours(bar.totalMinutes) }}h
                       </span>
                     </div>
                   }
                 </div>
               </div>
 
-              <!-- 8-Week Trend Chart -->
+              <!-- 2-Week Trend Chart -->
               <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
                 <div class="flex items-center justify-between">
                   <div>
                     <span class="text-xs font-semibold uppercase tracking-wider text-stone-400">
-                      Weekly Momentum (Last 8 Weeks)
+                      Weekly Momentum (Last 2 Weeks)
                     </span>
-                    <h3 class="text-sm font-semibold text-stone-200">Progress Towards {{ (activeP.periodTargetMinutes / 60).toFixed(0) }} Hours</h3>
+                    <h3 class="text-sm font-semibold text-stone-200">Progress Towards {{ firebaseService.formatHours(activeP.periodTargetMinutes) }} Hours</h3>
                   </div>
                   <span class="text-xs font-mono text-stone-400">
                     Weekly Target: {{ firebaseService.formatMinutes(activeP.weeklyTargetMinutes) }}
@@ -709,13 +651,13 @@
                 </div>
 
                 <!-- Weekly Bars -->
-                <div class="h-44 w-full flex items-end justify-between gap-2 pt-6 pb-2 px-2 relative border-b border-stone-800">
+                <div class="h-44 w-full flex items-end justify-around gap-6 pt-6 pb-2 px-8 relative border-b border-stone-800">
                   <div
                     class="absolute left-0 right-0 border-b border-dashed border-emerald-500/50 pointer-events-none"
                     [style.bottom.%]="Math.min(95, (activeP.weeklyTargetMinutes / chart8WeeksMaxMins()) * 100)"
                   >
                     <span class="absolute right-2 -top-4 text-[10px] font-mono text-emerald-400">
-                      Target ({{ (activeP.weeklyTargetMinutes / 60).toFixed(0) }}h)
+                      Target ({{ firebaseService.formatHours(activeP.weeklyTargetMinutes) }}h)
                     </span>
                   </div>
 
@@ -723,10 +665,10 @@
                     <div class="flex-1 flex flex-col items-center h-full justify-end group relative">
                       <div class="opacity-0 group-hover:opacity-100 pointer-events-none absolute -top-12 bg-stone-950 border border-stone-700 text-stone-100 text-[11px] py-1 px-2.5 rounded-lg shadow-xl whitespace-nowrap z-20 transition-opacity">
                         <div class="font-semibold">{{ w.weekLabel }}</div>
-                        <div class="text-emerald-400">{{ (w.totalMinutes / 60).toFixed(1) }} hours</div>
+                        <div class="text-emerald-400">{{ firebaseService.formatHours(w.totalMinutes) }} hours</div>
                       </div>
 
-                      <div class="w-full max-w-[28px] flex flex-col justify-end h-full">
+                      <div class="w-full max-w-[56px] flex flex-col justify-end h-full">
                         @if (w.totalMinutes > 0) {
                           <div
                             class="w-full rounded-t-md transition-all duration-300"
@@ -742,11 +684,11 @@
                         }
                       </div>
 
-                      <span class="text-[10px] text-stone-400 mt-2 truncate w-full text-center">
+                      <span class="text-xs text-stone-400 mt-2 font-medium text-center">
                         {{ w.weekLabel }}
                       </span>
-                      <span class="text-[9px] font-mono text-stone-500 tabular-nums">
-                        {{ (w.totalMinutes / 60).toFixed(1) }}h
+                      <span class="text-[10px] font-mono text-stone-500 tabular-nums">
+                        {{ firebaseService.formatHours(w.totalMinutes) }}h
                       </span>
                     </div>
                   }
@@ -805,62 +747,6 @@
                   </div>
                 }
               </div>
-            </div>
-
-            <!-- WhatsApp Weekly Digest Share Card -->
-            <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
-                    Partner Communication
-                  </span>
-                  <h3 class="text-base font-semibold text-stone-100">
-                    1-Click Weekly Accountability Digest
-                  </h3>
-                  <p class="text-xs text-stone-400">
-                    Send a structured check-in of your prayer hours, targets, streak, and praise reports to your circle on WhatsApp or iMessage.
-                  </p>
-                </div>
-
-                <div class="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    (click)="fetchPartnerEncouragement()"
-                    [disabled]="isGeneratingDigest()"
-                    class="py-2 px-3.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-amber-300 border border-stone-700 disabled:opacity-50 transition-all flex items-center gap-1.5"
-                  >
-                    <mat-icon style="font-size: 16px;">psychology</mat-icon>
-                    <span>{{ isGeneratingDigest() ? 'Drafting...' : 'Spiritual Encouragement' }}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    (click)="copyWeeklyDigest()"
-                    class="py-2 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
-                  >
-                    <mat-icon style="font-size: 16px;">content_copy</mat-icon>
-                    <span>{{ copiedDigest() ? 'Copied!' : 'Copy for WhatsApp' }}</span>
-                  </button>
-                </div>
-              </div>
-
-              @if (generatedEncouragement()) {
-                <div class="p-4 rounded-xl bg-stone-950 border border-amber-500/30 space-y-2">
-                  <div class="flex items-center justify-between text-xs text-amber-400 font-semibold">
-                    <span>Partner Encouragement Message:</span>
-                    <button
-                      type="button"
-                      (click)="generatedEncouragement.set(null)"
-                      class="text-stone-500 hover:text-stone-300"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                  <p class="text-xs text-stone-200 italic leading-relaxed">
-                    "{{ generatedEncouragement() }}"
-                  </p>
-                </div>
-              }
             </div>
           }
         </div>
@@ -935,13 +821,13 @@
           <!-- Filters Bar -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
             <div>
-              <label for="jSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search Notes, Burdens & Dates</label>
+              <label for="jSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search Notes &amp; Topics</label>
               <input
                 id="jSearch"
                 type="text"
                 [value]="journalSearch()"
                 (input)="journalSearch.set($any($event.target).value)"
-                placeholder="Search what was prayed about, scriptures, topics..."
+                placeholder="Search notes..."
                 class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
               />
             </div>
@@ -1360,7 +1246,7 @@
                 type="text"
                 [value]="testimonySearch()"
                 (input)="testimonySearch.set($any($event.target).value)"
-                placeholder="Search breakthroughs, healing, miracle..."
+                placeholder="Search testimonies..."
                 class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
               />
             </div>
@@ -1561,8 +1447,8 @@
                         {{ activeP.periodStartDate }} to {{ activeP.periodEndDate }}
                       </span>
                     </div>
-                    <span class="font-mono font-bold text-amber-400 text-sm">
-                      {{ (activeP.periodTargetMinutes / 60).toFixed(0) }} Hours Target
+                    <span class="font-mono font-bold text-amber-400 text-sm tabular-nums">
+                      {{ firebaseService.formatHours(activeP.periodTargetMinutes) }} Hours Target
                     </span>
                   </div>
                 </div>
@@ -1752,6 +1638,13 @@
     <app-add-partner-modal
       (dismiss)="showAddPartnerModal.set(false)"
       (added)="showToast('Prayer partner invited!')"
+    />
+  }
+
+  @if (showAuthModal()) {
+    <app-auth-modal
+      (dismiss)="showAuthModal.set(false)"
+      (signedIn)="showToast($event)"
     />
   }
 

@@ -5,7 +5,8 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
-import {join} from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
@@ -14,12 +15,49 @@ const angularApp = new AngularNodeAppEngine();
 
 app.use(express.json());
 
+const dataDir = join(process.cwd(), '.data');
+const storeFile = join(dataDir, 'watchman-cloud-store.json');
+
+interface CloudStoreData {
+  partnerships: Record<string, unknown>[];
+  sessions: Record<string, Record<string, unknown>[]>;
+  testimonies: Record<string, Record<string, unknown>[]>;
+  requests: Record<string, Record<string, unknown>[]>;
+}
+
+function loadCloudStore(): CloudStoreData {
+  try {
+    if (existsSync(storeFile)) {
+      const raw = readFileSync(storeFile, 'utf-8');
+      return JSON.parse(raw) as CloudStoreData;
+    }
+  } catch {
+    // ignore read error
+  }
+  return { partnerships: [], sessions: {}, testimonies: {}, requests: {} };
+}
+
+function saveCloudStore(data: CloudStoreData): void {
+  try {
+    if (!existsSync(dataDir)) {
+      mkdirSync(dataDir, { recursive: true });
+    }
+    writeFileSync(storeFile, JSON.stringify(data, null, 2), 'utf-8');
+  } catch {
+    // ignore write error on read-only fs
+  }
+}
+
+const memoryStore: CloudStoreData = loadCloudStore();
+
 /**
  * Production Security Headers: Prevent clickjacking, MIME sniffing, and referrer leaks
+ * while allowing Google OAuth popup windows to communicate back via window.opener.
  */
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
@@ -31,6 +69,73 @@ app.use((_req, res, next) => {
 app.get('/api/health', (_req, res) => {
   res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
+
+/**
+ * Render Fallback Cloud Sync Endpoint (allows partners signed in via Email/Name
+ * on Render to sync prayer circles, sessions, testimonies, and requests even before
+ * adding the Render domain to Firebase Console Authorized Domains).
+ */
+app.get('/api/cloud-sync', (req, res) => {
+  const email = String(req.query['email'] || '').toLowerCase().trim();
+  const partnershipId = String(req.query['partnershipId'] || '').trim();
+
+  const userPartnerships = email
+    ? memoryStore.partnerships.filter((p) => {
+        const emails = Array.isArray(p['memberEmails']) ? (p['memberEmails'] as string[]) : [];
+        return emails.map((e) => e.toLowerCase()).includes(email);
+      })
+    : memoryStore.partnerships;
+
+  if (partnershipId) {
+    return res.json({
+      partnerships: userPartnerships,
+      sessions: memoryStore.sessions[partnershipId] || [],
+      testimonies: memoryStore.testimonies[partnershipId] || [],
+      requests: memoryStore.requests[partnershipId] || [],
+    });
+  }
+
+  return res.json({ partnerships: userPartnerships });
+});
+
+app.post('/api/cloud-sync', (req, res) => {
+  const { type, action, partnershipId, item } = req.body || {};
+
+  if (type === 'partnership' && item && item.id) {
+    const idx = memoryStore.partnerships.findIndex((p) => p['id'] === item.id);
+    if (action === 'delete') {
+      if (idx >= 0) memoryStore.partnerships.splice(idx, 1);
+    } else if (idx >= 0) {
+      memoryStore.partnerships[idx] = { ...memoryStore.partnerships[idx], ...item };
+    } else {
+      memoryStore.partnerships.push(item);
+    }
+    saveCloudStore(memoryStore);
+    return res.json({ ok: true });
+  }
+
+  if (partnershipId && (type === 'sessions' || type === 'testimonies' || type === 'requests') && item && item.id) {
+    const collectionMap = memoryStore[type as 'sessions' | 'testimonies' | 'requests'];
+    if (!collectionMap[partnershipId]) {
+      collectionMap[partnershipId] = [];
+    }
+    const list = collectionMap[partnershipId];
+    const idx = list.findIndex((x) => x['id'] === item.id);
+
+    if (action === 'delete') {
+      if (idx >= 0) list.splice(idx, 1);
+    } else if (idx >= 0) {
+      list[idx] = { ...list[idx], ...item };
+    } else {
+      list.push(item);
+    }
+    saveCloudStore(memoryStore);
+    return res.json({ ok: true });
+  }
+
+  return res.status(400).json({ ok: false, error: 'Invalid sync payload' });
+});
+
 
 
 /**

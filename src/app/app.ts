@@ -24,6 +24,9 @@ import { RequestModal } from './components/request-modal';
 import { CreateCircleModal } from './components/create-circle-modal';
 import { AddPartnerModal } from './components/add-partner-modal';
 import { PrayerSanctuary } from './components/prayer-sanctuary';
+import { ThemeToggle } from './components/theme-toggle';
+import { AuthModal } from './components/auth-modal';
+import { ThemeService } from './services/theme.service';
 
 export type AppTab = 'dashboard' | 'sanctuary' | 'journal' | 'testimonies' | 'covenant';
 
@@ -41,12 +44,15 @@ export type AppTab = 'dashboard' | 'sanctuary' | 'journal' | 'testimonies' | 'co
     CreateCircleModal,
     AddPartnerModal,
     PrayerSanctuary,
+    ThemeToggle,
+    AuthModal,
   ],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
 export class App {
   readonly firebaseService = inject(FirebaseService);
+  readonly themeService = inject(ThemeService);
   private http = inject(HttpClient);
 
   // Active navigation tab
@@ -62,6 +68,7 @@ export class App {
   readonly showRequestModal = signal(false);
   readonly showCreateCircleModal = signal(false);
   readonly showAddPartnerModal = signal(false);
+  readonly showAuthModal = signal(false);
 
   readonly initialLogMinutes = signal<number>(0);
   readonly initialLogDate = signal<string | null>(null);
@@ -253,13 +260,20 @@ export class App {
   }
 
   // Auth actions
+  openSignInModal() {
+    this.showAuthModal.set(true);
+  }
+
   async signInWithGoogle() {
     try {
-      await this.firebaseService.loginWithGoogle();
-      this.showToast('Welcome to the Secret Place altar!');
+      const user = await this.firebaseService.loginWithGoogle();
+      if (user) {
+        this.showToast('Welcome to the Secret Place altar!');
+      }
     } catch (err) {
       console.error('Sign in failed', err);
-      this.showToast('Could not sign in with Google. Please try again.');
+      // Automatically open the Sign-In & Render Setup Modal so the user can sign in with Email immediately or copy their Render domain
+      this.showAuthModal.set(true);
     }
   }
 
@@ -275,7 +289,7 @@ export class App {
   // Quick action: open session log modal
   openNewSessionModal(mins = 0, date: string | null = null) {
     if (!this.firebaseService.isAuthenticated()) {
-      this.signInWithGoogle();
+      this.showAuthModal.set(true);
       return;
     }
     if (!this.firebaseService.activePartnership()) {
@@ -428,11 +442,11 @@ export class App {
     const targetMins = p.weeklyTargetMinutes;
     const weekHoursStr = this.firebaseService.formatMinutes(weekMins);
     const targetHoursStr = this.firebaseService.formatMinutes(targetMins);
-    const pct = targetMins > 0 ? Math.round((weekMins / targetMins) * 100) : 0;
+    const pct = this.firebaseService.formatPercentage(weekMins, targetMins);
 
-    const loggedHours = (this.firebaseService.periodMinutesLogged() / 60).toFixed(1);
-    const targetHours = (p.periodTargetMinutes / 60).toFixed(0);
-    const periodPct = this.firebaseService.periodProgressPct();
+    const loggedHours = this.firebaseService.formatHours(this.firebaseService.periodMinutesLogged());
+    const targetHours = this.firebaseService.formatHours(p.periodTargetMinutes);
+    const periodPct = this.firebaseService.formatOneDecimal(this.firebaseService.periodProgressPct());
 
     const streak = this.firebaseService.streakDays();
     const testimoniesCount = this.firebaseService.testimonies().length;
@@ -474,8 +488,8 @@ Keep pressing in, partners! 🕊️`;
       : p.memberEmails.map((e) => e.split('@')[0]).join(', ');
 
     const weekHours = this.firebaseService.formatMinutes(this.firebaseService.thisWeekMinutes());
-    const yearlyProgress = `${this.firebaseService.periodProgressPct()}%`;
-    const targetHours = (p.periodTargetMinutes / 60).toFixed(0);
+    const yearlyProgress = `${this.firebaseService.formatOneDecimal(this.firebaseService.periodProgressPct())}%`;
+    const targetHours = this.firebaseService.formatHours(p.periodTargetMinutes);
     const answeredCount = this.firebaseService.testimonies().length;
 
     this.http

@@ -64,13 +64,13 @@ import { FirebaseService } from '../services/firebase.service';
         <form [formGroup]="form" (ngSubmit)="submit()" class="space-y-4">
           <div>
             <label for="addEmail" class="block text-xs font-medium text-stone-300 mb-1.5">
-              Friend's Email Address
+              Partner Email
             </label>
             <input
               id="addEmail"
               type="email"
               formControlName="email"
-              placeholder="e.g. david.prayer@gmail.com"
+              placeholder="partner@email.com"
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
             />
           </div>

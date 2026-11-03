@@ -51,13 +51,13 @@ import { FirebaseService } from '../services/firebase.service';
           <!-- Title -->
           <div>
             <label for="rTitle" class="block text-xs font-medium text-stone-300 mb-1.5">
-              Request Title / Burden
+              Request Title
             </label>
             <input
               id="rTitle"
               type="text"
               formControlName="title"
-              placeholder="e.g. Breakthrough for friend, Peace in university admission"
+              placeholder="Short request title"
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
             />
           </div>
@@ -66,7 +66,7 @@ import { FirebaseService } from '../services/firebase.service';
           <div>
             <div class="flex items-center justify-between mb-2">
               <span class="block text-xs font-medium text-stone-300">
-                Focus Streams (Select all that apply)
+                Categories
               </span>
               <span class="text-[11px] text-amber-400 font-mono">
                 {{ selectedCategories().length }} selected
@@ -101,7 +101,7 @@ import { FirebaseService } from '../services/firebase.service';
 
           <!-- Assigned Partner -->
           <div>
-            <label for="rAssign" class="block text-xs font-medium text-stone-300 mb-1.5">Focus Intercessor</label>
+            <label for="rAssign" class="block text-xs font-medium text-stone-300 mb-1.5">Assigned To</label>
             <select
               id="rAssign"
               formControlName="assignedPartner"
@@ -117,13 +117,13 @@ import { FirebaseService } from '../services/firebase.service';
           <!-- Specific Prayer Points & Notes -->
           <div>
             <label for="rNotes" class="block text-xs font-medium text-stone-300 mb-1.5">
-              Prayer Points & Scriptures to Stand On
+              Prayer Points
             </label>
             <textarea
               id="rNotes"
-              rows="4"
+              rows="3"
               formControlName="notes"
-              placeholder="Details to pray for during sessions, scriptures to claim together, deadlines, or specific conditions..."
+              placeholder="Brief prayer points..."
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500 leading-relaxed"
             ></textarea>
           </div>

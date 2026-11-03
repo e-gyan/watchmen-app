@@ -4,8 +4,10 @@ import {
   GoogleAuthProvider,
   User,
   getAuth,
+  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
 } from 'firebase/auth';
 import {
@@ -58,6 +60,23 @@ export interface FirestoreErrorInfo {
       email?: string | null;
     }[];
   };
+}
+
+export interface AuthDiagnosticError {
+  code: string;
+  message: string;
+  domain: string;
+  projectId: string;
+}
+
+const FALLBACK_USER_KEY = 'watchman_partner_auth_user_v1';
+const LOCAL_STORE_KEY = 'watchman_local_cloud_backup_v1';
+
+interface LocalCloudBackup {
+  partnerships: Partnership[];
+  sessions: Record<string, PrayerSession[]>;
+  testimonies: Record<string, Testimony[]>;
+  requests: Record<string, PrayerRequest[]>;
 }
 
 // Initialize Firebase
@@ -118,6 +137,9 @@ export class FirebaseService {
   readonly currentUser = signal<User | null>(null);
   readonly isAuthReady = signal<boolean>(false);
   readonly isAuthenticated = computed(() => !!this.currentUser());
+  readonly isFallbackMode = signal<boolean>(false);
+  readonly lastAuthError = signal<AuthDiagnosticError | null>(null);
+  readonly firebaseProjectId = firebaseConfig.projectId;
 
   // Firestore collections & subscriptions
   readonly partnerships = signal<Partnership[]>([]);
@@ -134,10 +156,16 @@ export class FirebaseService {
   private unsubSessions: (() => void) | null = null;
   private unsubTestimonies: (() => void) | null = null;
   private unsubRequests: (() => void) | null = null;
+  private fallbackPollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.testConnection();
     this.initAuthListener();
+  }
+
+  getCurrentDomain(): string {
+    if (typeof window === 'undefined') return '';
+    return window.location.hostname || '';
   }
 
   private async testConnection() {
@@ -153,37 +181,372 @@ export class FirebaseService {
 
   private initAuthListener() {
     if (typeof window === 'undefined') return;
-    onAuthStateChanged(auth, async (user) => {
-      this.currentUser.set(user);
-      this.isAuthReady.set(true);
 
+    // Complete any pending OAuth redirect flow
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          this.lastAuthError.set(null);
+          this.isFallbackMode.set(false);
+          localStorage.removeItem(FALLBACK_USER_KEY);
+        }
+      })
+      .catch((err) => {
+        this.recordAuthError(err);
+      });
+
+    onAuthStateChanged(auth, async (user) => {
       if (user) {
+        this.isFallbackMode.set(false);
+        this.stopFallbackPolling();
+        localStorage.removeItem(FALLBACK_USER_KEY);
+        this.currentUser.set(user);
+        this.isAuthReady.set(true);
         await this.syncUserProfile(user);
         this.subscribeToUserPartnerships(user);
       } else {
-        this.clearSubscriptions();
+        // Check if the user signed in via Partner Email fallback (e.g. on Render prior to domain authorization)
+        const savedFallback = this.loadFallbackUser();
+        if (savedFallback) {
+          this.isFallbackMode.set(true);
+          this.currentUser.set(savedFallback);
+          this.isAuthReady.set(true);
+          await this.loadFromFallbackCloud(savedFallback);
+          this.startFallbackPolling(savedFallback);
+        } else {
+          this.isFallbackMode.set(false);
+          this.currentUser.set(null);
+          this.isAuthReady.set(true);
+          this.clearSubscriptions();
+        }
       }
     });
   }
 
+  private recordAuthError(err: unknown): AuthDiagnosticError {
+    const code = (err as { code?: string })?.code || 'auth/unknown';
+    const rawMsg = err instanceof Error ? err.message : String(err);
+    const domain = this.getCurrentDomain();
+    let friendly = rawMsg;
+
+    if (code === 'auth/unauthorized-domain' || rawMsg.includes('unauthorized-domain')) {
+      friendly = `Domain "${domain}" is not yet added to Firebase Authorized Domains for Google Popup Sign-In.`;
+    } else if (code === 'auth/popup-blocked' || rawMsg.includes('popup-blocked')) {
+      friendly = 'Your browser blocked the Google Sign-In popup window.';
+    } else if (code === 'auth/popup-closed-by-user') {
+      friendly = 'The Google Sign-In window was closed before completing login.';
+    }
+
+    const diag: AuthDiagnosticError = {
+      code,
+      message: friendly,
+      domain,
+      projectId: firebaseConfig.projectId,
+    };
+    this.lastAuthError.set(diag);
+    return diag;
+  }
+
   async loginWithGoogle(): Promise<User | null> {
+    this.lastAuthError.set(null);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      const provider = new GoogleAuthProvider();
-      provider.setCustomParameters({ prompt: 'select_account' });
       const result = await signInWithPopup(auth, provider);
+      this.isFallbackMode.set(false);
+      localStorage.removeItem(FALLBACK_USER_KEY);
       return result.user;
     } catch (err) {
+      const diag = this.recordAuthError(err);
+      // If popup was blocked by browser, try redirect automatically
+      if (diag.code === 'auth/popup-blocked') {
+        await signInWithRedirect(auth, provider);
+        return null;
+      }
       console.error('Google Sign In Error:', err);
       throw err;
     }
   }
 
+  async loginWithGoogleRedirect(): Promise<void> {
+    this.lastAuthError.set(null);
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    try {
+      await signInWithRedirect(auth, provider);
+    } catch (err) {
+      this.recordAuthError(err);
+      throw err;
+    }
+  }
+
+  /**
+   * Direct Partner Email & Name Sign-In:
+   * Allows users on Render (or any custom host) to sign in immediately using their
+   * Google email address and name even before the domain is added to Firebase Console's
+   * Authorized Domains list.
+   */
+  async loginWithPartnerEmail(emailInput: string, displayNameInput: string): Promise<User> {
+    const cleanEmail = emailInput.toLowerCase().trim();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      throw new Error('Please enter a valid email address');
+    }
+    const cleanName = displayNameInput.trim() || cleanEmail.split('@')[0] || 'Intercessor';
+    const deterministicUid = 'partner-' + cleanEmail.replace(/[^a-z0-9]/g, '_');
+
+    const fallbackUser = {
+      uid: deterministicUid,
+      email: cleanEmail,
+      displayName: cleanName,
+      emailVerified: true,
+      isAnonymous: false,
+      photoURL: null,
+      providerData: [{ providerId: 'partner-email', email: cleanEmail, displayName: cleanName }],
+    } as unknown as User;
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(
+        FALLBACK_USER_KEY,
+        JSON.stringify({ uid: deterministicUid, email: cleanEmail, displayName: cleanName })
+      );
+    }
+
+    this.lastAuthError.set(null);
+    this.isFallbackMode.set(true);
+    this.currentUser.set(fallbackUser);
+    this.isAuthReady.set(true);
+    await this.loadFromFallbackCloud(fallbackUser);
+    this.startFallbackPolling(fallbackUser);
+    return fallbackUser;
+  }
+
+  private loadFallbackUser(): User | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(FALLBACK_USER_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { uid: string; email: string; displayName: string };
+      if (!parsed.email) return null;
+      return {
+        uid: parsed.uid,
+        email: parsed.email,
+        displayName: parsed.displayName,
+        emailVerified: true,
+        isAnonymous: false,
+        photoURL: null,
+        providerData: [{ providerId: 'partner-email', email: parsed.email, displayName: parsed.displayName }],
+      } as unknown as User;
+    } catch {
+      return null;
+    }
+  }
+
   async logout(): Promise<void> {
-    await signOut(auth);
+    this.stopFallbackPolling();
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(FALLBACK_USER_KEY);
+    }
+    this.isFallbackMode.set(false);
+    this.currentUser.set(null);
     this.clearSubscriptions();
+    try {
+      await signOut(auth);
+    } catch {
+      // ignore if already signed out of firebase
+    }
+  }
+
+  // --- Fallback Server + Local Cloud Store Helpers ---
+
+  private getLocalBackup(): LocalCloudBackup {
+    if (typeof window === 'undefined') {
+      return { partnerships: [], sessions: {}, testimonies: {}, requests: {} };
+    }
+    try {
+      const raw = localStorage.getItem(LOCAL_STORE_KEY);
+      if (raw) return JSON.parse(raw) as LocalCloudBackup;
+    } catch {
+      // ignore
+    }
+    return { partnerships: [], sessions: {}, testimonies: {}, requests: {} };
+  }
+
+  private saveLocalBackup(data: LocalCloudBackup) {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(LOCAL_STORE_KEY, JSON.stringify(data));
+    } catch {
+      // ignore
+    }
+  }
+
+  private startFallbackPolling(user: User) {
+    this.stopFallbackPolling();
+    this.fallbackPollTimer = setInterval(() => {
+      this.loadFromFallbackCloud(user);
+    }, 8000);
+  }
+
+  private stopFallbackPolling() {
+    if (this.fallbackPollTimer) {
+      clearInterval(this.fallbackPollTimer);
+      this.fallbackPollTimer = null;
+    }
+  }
+
+  private async loadFromFallbackCloud(user: User) {
+    if (typeof window === 'undefined') return;
+    const email = (user.email || '').toLowerCase().trim();
+    const activeId = this.activePartnershipId();
+    const backup = this.getLocalBackup();
+
+    try {
+      const queryParams = new URLSearchParams({ email });
+      if (activeId) queryParams.set('partnershipId', activeId);
+      const resp = await fetch(`/api/cloud-sync?${queryParams.toString()}`);
+      if (resp.ok) {
+        const data = (await resp.json()) as {
+          partnerships?: Partnership[];
+          sessions?: PrayerSession[];
+          testimonies?: Testimony[];
+          requests?: PrayerRequest[];
+        };
+
+        // Merge server partnerships with local backup partnerships
+        const mergedPartnershipsMap = new Map<string, Partnership>();
+        backup.partnerships
+          .filter((p) => p.memberEmails.map((e) => e.toLowerCase()).includes(email))
+          .forEach((p) => mergedPartnershipsMap.set(p.id, p));
+        (data.partnerships || []).forEach((p) => mergedPartnershipsMap.set(p.id, p));
+
+        const list = Array.from(mergedPartnershipsMap.values());
+        this.partnerships.set(list);
+
+        let targetPid = activeId;
+        if (list.length > 0 && (!targetPid || !list.some((p) => p.id === targetPid))) {
+          targetPid = list[0].id;
+          this.activePartnershipId.set(targetPid);
+        }
+
+        if (targetPid) {
+          // Fetch subcollections if targetPid changed
+          let subData = data;
+          if (targetPid !== activeId) {
+            const subResp = await fetch(
+              `/api/cloud-sync?email=${encodeURIComponent(email)}&partnershipId=${encodeURIComponent(targetPid)}`
+            );
+            if (subResp.ok) {
+              subData = await subResp.json();
+            }
+          }
+
+          const mergeById = <T extends { id: string }>(localArr: T[], serverArr: T[]): T[] => {
+            const m = new Map<string, T>();
+            (localArr || []).forEach((item) => m.set(item.id, item));
+            (serverArr || []).forEach((item) => m.set(item.id, item));
+            return Array.from(m.values());
+          };
+
+          const mergedSessions = mergeById(backup.sessions[targetPid] || [], subData.sessions || []);
+          mergedSessions.sort((a, b) => b.date.localeCompare(a.date));
+          this.sessions.set(mergedSessions);
+
+          const mergedTestimonies = mergeById(backup.testimonies[targetPid] || [], subData.testimonies || []);
+          mergedTestimonies.sort((a, b) => b.date.localeCompare(a.date));
+          this.testimonies.set(mergedTestimonies);
+
+          const mergedRequests = mergeById(backup.requests[targetPid] || [], subData.requests || []);
+          mergedRequests.sort((a, b) => b.dateAdded.localeCompare(a.dateAdded));
+          this.requests.set(mergedRequests);
+
+          // Persist merged state locally
+          backup.partnerships = list;
+          backup.sessions[targetPid] = mergedSessions;
+          backup.testimonies[targetPid] = mergedTestimonies;
+          backup.requests[targetPid] = mergedRequests;
+          this.saveLocalBackup(backup);
+        }
+        return;
+      }
+    } catch {
+      // Fallback to localStorage if offline
+    }
+
+    const localPartnerships = backup.partnerships.filter((p) =>
+      p.memberEmails.map((e) => e.toLowerCase()).includes(email)
+    );
+    this.partnerships.set(localPartnerships);
+    if (localPartnerships.length > 0) {
+      const pid = activeId && localPartnerships.some((p) => p.id === activeId) ? activeId : localPartnerships[0].id;
+      this.activePartnershipId.set(pid);
+      this.sessions.set(backup.sessions[pid] || []);
+      this.testimonies.set(backup.testimonies[pid] || []);
+      this.requests.set(backup.requests[pid] || []);
+    }
+  }
+
+  private async pushToFallbackCloud(
+    type: 'partnership' | 'sessions' | 'testimonies' | 'requests',
+    action: 'upsert' | 'delete',
+    item: Record<string, unknown>,
+    partnershipId?: string
+  ) {
+    const backup = this.getLocalBackup();
+    const itemId = String(item['id'] || '');
+
+    if (type === 'partnership') {
+      const idx = backup.partnerships.findIndex((p) => p.id === itemId);
+      if (action === 'delete') {
+        if (idx >= 0) backup.partnerships.splice(idx, 1);
+      } else if (idx >= 0) {
+        backup.partnerships[idx] = { ...backup.partnerships[idx], ...(item as unknown as Partnership) };
+      } else {
+        backup.partnerships.push(item as unknown as Partnership);
+      }
+      this.partnerships.set([...backup.partnerships]);
+    } else if (partnershipId) {
+      if (!backup[type][partnershipId]) {
+        backup[type][partnershipId] = [];
+      }
+      const arr = backup[type][partnershipId] as unknown as Record<string, unknown>[];
+      const idx = arr.findIndex((x) => x['id'] === itemId);
+      if (action === 'delete') {
+        if (idx >= 0) arr.splice(idx, 1);
+      } else if (idx >= 0) {
+        arr[idx] = { ...arr[idx], ...item };
+      } else {
+        arr.push(item);
+      }
+
+      if (type === 'sessions') {
+        const list = [...backup.sessions[partnershipId]].sort((a, b) => b.date.localeCompare(a.date));
+        this.sessions.set(list);
+      } else if (type === 'testimonies') {
+        const list = [...backup.testimonies[partnershipId]].sort((a, b) => b.date.localeCompare(a.date));
+        this.testimonies.set(list);
+      } else if (type === 'requests') {
+        const list = [...backup.requests[partnershipId]].sort((a, b) => b.dateAdded.localeCompare(a.dateAdded));
+        this.requests.set(list);
+      }
+    }
+
+    this.saveLocalBackup(backup);
+
+    if (typeof window !== 'undefined') {
+      try {
+        await fetch('/api/cloud-sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, action, partnershipId, item }),
+        });
+      } catch {
+        // ignore network error; saved in local backup
+      }
+    }
   }
 
   private async syncUserProfile(user: User) {
+    if (this.isFallbackMode() || !auth.currentUser) return;
     const userPath = `users/${user.uid}`;
     try {
       const profileData: AppUser = {
@@ -200,6 +563,11 @@ export class FirebaseService {
   }
 
   private subscribeToUserPartnerships(user: User) {
+    if (this.isFallbackMode() || !auth.currentUser) {
+      this.loadFromFallbackCloud(user);
+      return;
+    }
+
     this.clearSubscriptions();
     const userEmail = (user.email || '').toLowerCase();
     const partnershipsPath = 'partnerships';
@@ -253,10 +621,17 @@ export class FirebaseService {
   selectPartnership(partnershipId: string) {
     this.activePartnershipId.set(partnershipId);
     this.activeFilterMember.set('all');
+    if (this.isFallbackMode() || !auth.currentUser) {
+      const u = this.currentUser();
+      if (u) this.loadFromFallbackCloud(u);
+      return;
+    }
     this.subscribeToPartnershipData(partnershipId);
   }
 
   private subscribeToPartnershipData(partnershipId: string) {
+    if (this.isFallbackMode() || !auth.currentUser) return;
+
     // Unsubscribe previous subcollections
     if (this.unsubSessions) this.unsubSessions();
     if (this.unsubTestimonies) this.unsubTestimonies();
@@ -379,6 +754,12 @@ export class FirebaseService {
       createdAt: new Date().toISOString(),
     };
 
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('partnership', 'upsert', removeUndefinedFields(newPartnership) as unknown as Record<string, unknown>);
+      this.selectPartnership(pId);
+      return pId;
+    }
+
     try {
       await setDoc(doc(db, 'partnerships', pId), removeUndefinedFields(newPartnership));
       this.selectPartnership(pId);
@@ -402,6 +783,12 @@ export class FirebaseService {
     }
 
     const updatedEmails = [...p.memberEmails, normalizedEmail];
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('partnership', 'upsert', { ...p, memberEmails: updatedEmails } as unknown as Record<string, unknown>);
+      return;
+    }
+
     const pPath = `partnerships/${partnershipId}`;
     try {
       await updateDoc(doc(db, 'partnerships', partnershipId), {
@@ -423,6 +810,22 @@ export class FirebaseService {
       periodEndDate: string;
     }
   ): Promise<void> {
+    if (this.isFallbackMode() || !auth.currentUser) {
+      const p = this.partnerships().find((x) => x.id === partnershipId);
+      if (p) {
+        await this.pushToFallbackCloud('partnership', 'upsert', {
+          ...p,
+          dailyTargetMinutes: targets.dailyMinutes,
+          weeklyTargetMinutes: targets.weeklyMinutes,
+          periodTitle: targets.periodTitle,
+          periodTargetMinutes: targets.periodTargetMinutes,
+          periodStartDate: targets.periodStartDate,
+          periodEndDate: targets.periodEndDate,
+        } as unknown as Record<string, unknown>);
+      }
+      return;
+    }
+
     const pPath = `partnerships/${partnershipId}`;
     try {
       await updateDoc(doc(db, 'partnerships', partnershipId), {
@@ -483,6 +886,11 @@ export class FirebaseService {
       newSession['linkedTestimonyTitle'] = sessionData.linkedTestimonyTitle;
     }
 
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('sessions', 'upsert', removeUndefinedFields(newSession), pId);
+      return sId;
+    }
+
     try {
       await setDoc(doc(db, 'partnerships', pId, 'sessions', sId), removeUndefinedFields(newSession));
       return sId;
@@ -516,6 +924,16 @@ export class FirebaseService {
       linkedTestimonyTitle: session.linkedTestimonyTitle || null,
     };
 
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud(
+        'sessions',
+        'upsert',
+        removeUndefinedFields({ ...session, ...updatedData }),
+        pId
+      );
+      return;
+    }
+
     try {
       await updateDoc(doc(db, 'partnerships', pId, 'sessions', session.id), removeUndefinedFields(updatedData));
     } catch (err) {
@@ -526,6 +944,12 @@ export class FirebaseService {
   async deleteSession(sessionId: string): Promise<void> {
     const pId = this.activePartnershipId();
     if (!pId) return;
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('sessions', 'delete', { id: sessionId }, pId);
+      return;
+    }
+
     const sPath = `partnerships/${pId}/sessions/${sessionId}`;
     try {
       await deleteDoc(doc(db, 'partnerships', pId, 'sessions', sessionId));
@@ -573,6 +997,14 @@ export class FirebaseService {
       newTestimony['linkedSessionId'] = testimonyData.linkedSessionId;
     }
 
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('testimonies', 'upsert', removeUndefinedFields(newTestimony), pId);
+      if (testimonyData.linkedSessionId) {
+        await this.linkTestimonyToSession(testimonyData.linkedSessionId, tId, testimonyData.title);
+      }
+      return tId;
+    }
+
     try {
       await setDoc(doc(db, 'partnerships', pId, 'testimonies', tId), removeUndefinedFields(newTestimony));
 
@@ -608,6 +1040,19 @@ export class FirebaseService {
       linkedSessionId: testimony.linkedSessionId || null,
     };
 
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud(
+        'testimonies',
+        'upsert',
+        removeUndefinedFields({ ...testimony, ...updatedData }),
+        pId
+      );
+      if (testimony.linkedSessionId) {
+        await this.linkTestimonyToSession(testimony.linkedSessionId, testimony.id, testimony.title);
+      }
+      return;
+    }
+
     try {
       await updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimony.id), removeUndefinedFields(updatedData));
 
@@ -632,6 +1077,28 @@ export class FirebaseService {
   ): Promise<void> {
     const pId = this.activePartnershipId();
     if (!pId) return;
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      const existingSession = this.sessions().find((s) => s.id === sessionId);
+      if (existingSession) {
+        await this.pushToFallbackCloud(
+          'sessions',
+          'upsert',
+          { ...existingSession, linkedTestimonyId: testimonyId, linkedTestimonyTitle: testimonyTitle } as unknown as Record<string, unknown>,
+          pId
+        );
+      }
+      const existingTestimony = this.testimonies().find((t) => t.id === testimonyId);
+      if (existingTestimony) {
+        await this.pushToFallbackCloud(
+          'testimonies',
+          'upsert',
+          { ...existingTestimony, linkedSessionId: sessionId } as unknown as Record<string, unknown>,
+          pId
+        );
+      }
+      return;
+    }
 
     try {
       // 1. Update session with testimony info
@@ -659,6 +1126,16 @@ export class FirebaseService {
     const uids = t.amenUids || [];
     if (uids.includes(user.uid)) return; // already praised
 
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud(
+        'testimonies',
+        'upsert',
+        { ...t, amensCount: (t.amensCount || 0) + 1, amenUids: [...uids, user.uid] } as unknown as Record<string, unknown>,
+        pId
+      );
+      return;
+    }
+
     const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
     try {
       await updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
@@ -673,6 +1150,12 @@ export class FirebaseService {
   async deleteTestimony(testimonyId: string): Promise<void> {
     const pId = this.activePartnershipId();
     if (!pId) return;
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('testimonies', 'delete', { id: testimonyId }, pId);
+      return;
+    }
+
     const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
     try {
       await deleteDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId));
@@ -716,6 +1199,11 @@ export class FirebaseService {
       newRequest['answeredTestimonyId'] = requestData.answeredTestimonyId;
     }
 
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('requests', 'upsert', removeUndefinedFields(newRequest), pId);
+      return;
+    }
+
     try {
       await setDoc(doc(db, 'partnerships', pId, 'requests', rId), removeUndefinedFields(newRequest));
     } catch (err) {
@@ -742,6 +1230,16 @@ export class FirebaseService {
       answeredTestimonyId: request.answeredTestimonyId || null,
     };
 
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud(
+        'requests',
+        'upsert',
+        removeUndefinedFields({ ...request, ...updatedData }),
+        pId
+      );
+      return;
+    }
+
     try {
       await updateDoc(doc(db, 'partnerships', pId, 'requests', request.id), removeUndefinedFields(updatedData));
     } catch (err) {
@@ -756,8 +1254,22 @@ export class FirebaseService {
   async toggleRequestAnswered(requestId: string, currentStatus: string): Promise<void> {
     const pId = this.activePartnershipId();
     if (!pId) return;
-    const rPath = `partnerships/${pId}/requests/${requestId}`;
     const nextStatus = currentStatus === 'answered' ? 'active' : 'answered';
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      const existing = this.requests().find((r) => r.id === requestId);
+      if (existing) {
+        await this.pushToFallbackCloud(
+          'requests',
+          'upsert',
+          { ...existing, status: nextStatus } as unknown as Record<string, unknown>,
+          pId
+        );
+      }
+      return;
+    }
+
+    const rPath = `partnerships/${pId}/requests/${requestId}`;
     try {
       await updateDoc(doc(db, 'partnerships', pId, 'requests', requestId), {
         status: nextStatus,
@@ -770,6 +1282,12 @@ export class FirebaseService {
   async deleteRequest(requestId: string): Promise<void> {
     const pId = this.activePartnershipId();
     if (!pId) return;
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('requests', 'delete', { id: requestId }, pId);
+      return;
+    }
+
     const rPath = `partnerships/${pId}/requests/${requestId}`;
     try {
       await deleteDoc(doc(db, 'partnerships', pId, 'requests', requestId));
@@ -871,7 +1389,7 @@ export class FirebaseService {
     const all = this.filteredSessions();
     const bars: DailyChartBar[] = [];
 
-    for (let i = 6; i >= 0; i--) {
+    for (let i = 4; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = this.formatDate(d);
@@ -909,7 +1427,7 @@ export class FirebaseService {
     const all = this.filteredSessions();
     const weeks: WeeklyTrendBar[] = [];
 
-    for (let w = 7; w >= 0; w--) {
+    for (let w = 1; w >= 0; w--) {
       const now = new Date();
       const dayOfWeek = now.getDay();
       const distanceToMonday = (dayOfWeek + 6) % 7;
@@ -925,12 +1443,7 @@ export class FirebaseService {
       const weekSessions = all.filter((s) => s.date >= startStr && s.date <= endStr);
       const total = weekSessions.reduce((acc, s) => acc + s.durationMinutes, 0);
 
-      const label =
-        w === 0
-          ? 'This Week'
-          : w === 1
-          ? 'Last Wk'
-          : `${monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      const label = w === 0 ? 'This Week' : 'Last Week';
 
       weeks.push({
         weekLabel: label,
@@ -1082,7 +1595,7 @@ export class FirebaseService {
     const daysRemaining = Math.max(1, Math.ceil(msDiff / (1000 * 60 * 60 * 24)));
 
     const remainingMins = this.periodMinutesRemaining();
-    const requiredDailyMins = Math.ceil(remainingMins / daysRemaining);
+    const requiredDailyMins = Math.round((remainingMins / daysRemaining) * 10) / 10;
 
     const loggedHours = Math.round((this.periodMinutesLogged() / 60) * 10) / 10;
     const targetHours = Math.round((p.periodTargetMinutes / 60) * 10) / 10;
@@ -1094,17 +1607,42 @@ export class FirebaseService {
       requiredDailyMins,
       loggedHours,
       targetHours,
-      avgDailyVelocityMinutes: Math.round(this.thisWeekMinutes() / 7),
+      avgDailyVelocityMinutes: Math.round((this.thisWeekMinutes() / 7) * 10) / 10,
       isAhead,
     };
   });
 
-  // Time formatting utilities
+  // Floating-point & Time formatting utilities (strictly 1 decimal point for floats)
+  formatOneDecimal(val: number): string {
+    const num = Number(val);
+    if (!Number.isFinite(num)) return '0.0';
+    return (Math.round(num * 10) / 10).toFixed(1);
+  }
+
+  formatHours(mins: number): string {
+    const num = Number(mins);
+    if (!Number.isFinite(num) || num <= 0) return '0.0';
+    return (Math.round((num / 60) * 10) / 10).toFixed(1);
+  }
+
+  formatPercentage(value: number, target: number): string {
+    const v = Number(value) || 0;
+    const t = Number(target) || 0;
+    if (t <= 0) return '0.0';
+    const pct = Math.min(100, Math.max(0, (v / t) * 100));
+    return (Math.round(pct * 10) / 10).toFixed(1);
+  }
+
   formatMinutes(mins: number): string {
-    if (mins < 60) return `${mins}m`;
-    const h = Math.floor(mins / 60);
-    const m = mins % 60;
-    return m === 0 ? `${h}h` : `${h}h ${m}m`;
+    const safeMins = Math.round((Number(mins) || 0) * 10) / 10;
+    if (safeMins < 60) {
+      return Number.isInteger(safeMins) ? `${safeMins}m` : `${safeMins.toFixed(1)}m`;
+    }
+    const h = Math.floor(safeMins / 60);
+    const m = Math.round((safeMins % 60) * 10) / 10;
+    if (m === 0) return `${h}h`;
+    const mStr = Number.isInteger(m) ? `${m}m` : `${m.toFixed(1)}m`;
+    return `${h}h ${mStr}`;
   }
 
   getTodayDateString(): string {

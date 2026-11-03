@@ -51,13 +51,13 @@ import { FirebaseService } from '../services/firebase.service';
           <!-- Circle Name -->
           <div>
             <label for="circleName" class="block text-xs font-medium text-stone-300 mb-1.5">
-              Partnership / Circle Name
+              Circle Name
             </label>
             <input
               id="circleName"
               type="text"
               formControlName="name"
-              placeholder="e.g. Emmanuel & Friends Prayer Altar"
+              placeholder="Circle name"
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
             />
           </div>
@@ -65,17 +65,17 @@ import { FirebaseService } from '../services/firebase.service';
           <!-- Partner Emails -->
           <div>
             <label for="partnerEmails" class="block text-xs font-medium text-stone-300 mb-1.5">
-              Prayer Partner Emails (comma-separated, can be more than 1)
+              Partner Emails (comma-separated)
             </label>
             <input
               id="partnerEmails"
               type="text"
               formControlName="partnerEmails"
-              placeholder="e.g. friend1@gmail.com, partner2@gmail.com"
+              placeholder="partner@email.com"
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
             />
             <p class="text-[11px] text-stone-500 mt-1">
-              Your own email is automatically included as the covenant creator.
+              Your own email is automatically included.
             </p>
           </div>
 

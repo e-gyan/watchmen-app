@@ -69,7 +69,7 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, Testimony } from '../models/praye
               id="tTitle"
               type="text"
               formControlName="title"
-              placeholder="e.g. Breakthrough: Full Scholarship Approved for Sister"
+              placeholder="Short title"
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
             />
           </div>
@@ -89,7 +89,7 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, Testimony } from '../models/praye
           <div>
             <div class="flex items-center justify-between mb-2">
               <span class="block text-xs font-medium text-stone-300">
-                Praise Categories (Select all that apply)
+                Praise Categories
               </span>
               <span class="text-[11px] text-amber-400 font-mono">
                 {{ selectedCategories().length }} selected
@@ -128,13 +128,13 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, Testimony } from '../models/praye
           <!-- What We Asked (The Burden) -->
           <div>
             <label for="tBurden" class="block text-xs font-medium text-stone-300 mb-1.5">
-              What Was Prayed About (The Petition / Burden)
+              Prayer Request
             </label>
             <textarea
               id="tBurden"
               rows="2"
               formControlName="prayerBurden"
-              placeholder="What was the original prayer request or burden carried to the altar?"
+              placeholder="What we prayed for"
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500 leading-relaxed"
             ></textarea>
           </div>
@@ -142,13 +142,13 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, Testimony } from '../models/praye
           <!-- How God Answered (The Manifestation) -->
           <div>
             <label for="tAnswer" class="block text-xs font-medium text-stone-300 mb-1.5">
-              How God Answered (The Praise Report)
+              How God Answered
             </label>
             <textarea
               id="tAnswer"
-              rows="4"
+              rows="3"
               formControlName="answeredDetail"
-              placeholder="Document the exact details of how God answered: what happened, when it took place, and how His power was revealed..."
+              placeholder="Brief testimony note..."
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500 leading-relaxed"
             ></textarea>
           </div>
@@ -156,13 +156,13 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, Testimony } from '../models/praye
           <!-- Scripture of Praise -->
           <div>
             <label for="tScripture" class="block text-xs font-medium text-stone-300 mb-1.5">
-              Scripture of Praise or Thanksgiving (optional)
+              Scripture (optional)
             </label>
             <input
               id="tScripture"
               type="text"
               formControlName="scripturePraise"
-              placeholder="e.g. Psalm 126:1-3, Ephesians 3:20, Luke 1:45"
+              placeholder="Psalm 126:1"
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
             />
           </div>

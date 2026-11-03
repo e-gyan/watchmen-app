@@ -13,6 +13,7 @@ body {
   font-family: var(--font-sans);
   background-color: #0c0a09;
   color: #f5f5f4;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .tabular-nums {
@@ -51,4 +52,208 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(217, 119, 6, 0.4);
+}
+
+/* ==========================================================================
+   High-Contrast Light Mode Rules (WCAG Accessible)
+   ========================================================================== */
+
+html.light,
+html.light body {
+  background-color: #fafaf9;
+  color: #1c1917;
+}
+
+/* Background surfaces */
+html.light .bg-stone-950 {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-stone-950\/90,
+html.light .bg-stone-950\/95,
+html.light .bg-stone-950\/80 {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+}
+
+html.light .bg-stone-900 {
+  background-color: #f5f5f4 !important;
+}
+
+html.light .bg-stone-900\/60,
+html.light .bg-stone-900\/70,
+html.light .bg-stone-900\/80,
+html.light .bg-stone-900\/90 {
+  background-color: rgba(245, 245, 244, 0.92) !important;
+}
+
+html.light .bg-stone-850,
+html.light .bg-stone-800 {
+  background-color: #e7e5e4 !important;
+}
+
+html.light .bg-stone-800\/80,
+html.light .bg-stone-800\/60,
+html.light .bg-stone-800\/50,
+html.light .bg-stone-800\/40,
+html.light .bg-stone-800\/30 {
+  background-color: rgba(231, 229, 228, 0.75) !important;
+}
+
+/* Borders */
+html.light .border-stone-800,
+html.light .border-stone-800\/80,
+html.light .border-stone-800\/60,
+html.light .border-stone-800\/40,
+html.light .border-stone-700 {
+  border-color: #d6d3d1 !important;
+}
+
+html.light .border-stone-900 {
+  border-color: #e7e5e4 !important;
+}
+
+html.light .divide-stone-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #e7e5e4 !important;
+}
+
+/* High Contrast Typography */
+html.light .text-stone-100 {
+  color: #0c0a09 !important; /* > 16:1 contrast ratio against light backgrounds */
+}
+
+html.light .text-stone-200 {
+  color: #1c1917 !important;
+}
+
+html.light .text-stone-300 {
+  color: #292524 !important;
+}
+
+html.light .text-stone-400 {
+  color: #44403c !important; /* high legibility */
+}
+
+html.light .text-stone-500 {
+  color: #57534e !important;
+}
+
+/* High Contrast Amber Accents (Adjusted for light backgrounds to achieve WCAG AA/AAA) */
+html.light .text-amber-400 {
+  color: #b45309 !important; /* amber-700: 4.8:1 contrast */
+}
+
+html.light .text-amber-300 {
+  color: #92400e !important; /* amber-800 */
+}
+
+html.light .text-amber-200 {
+  color: #78350f !important;
+}
+
+html.light .bg-amber-500\/10 {
+  background-color: rgba(217, 119, 6, 0.12) !important;
+}
+
+html.light .bg-amber-500\/20 {
+  background-color: rgba(217, 119, 6, 0.2) !important;
+}
+
+html.light .border-amber-500\/40,
+html.light .border-amber-500\/30 {
+  border-color: rgba(180, 83, 9, 0.45) !important;
+}
+
+/* Status Accents */
+html.light .text-emerald-400 {
+  color: #047857 !important; /* emerald-700 */
+}
+
+html.light .text-red-400 {
+  color: #b91c1c !important; /* red-700 */
+}
+
+html.light .text-blue-400 {
+  color: #1d4ed8 !important; /* blue-700 */
+}
+
+html.light .text-purple-400 {
+  color: #6d28d9 !important; /* purple-700 */
+}
+
+/* Gradients & Special Surfaces in Light Mode */
+html.light .from-stone-900.to-stone-950,
+html.light .from-stone-900\/60.to-stone-950\/60,
+html.light .from-stone-900.via-stone-900\/80.to-stone-950 {
+  background-image: linear-gradient(to bottom, #ffffff, #f5f5f4) !important;
+}
+
+html.light .from-amber-950\/20,
+html.light .from-amber-950\/30 {
+  --tw-gradient-from: rgba(254, 243, 199, 0.5) !important;
+}
+
+html.light .to-stone-950\/80,
+html.light .to-stone-950 {
+  --tw-gradient-to: #ffffff !important;
+}
+
+/* SVG stroke styling */
+html.light .stroke-stone-800 {
+  stroke: #e7e5e4 !important;
+}
+html.light .stroke-stone-700 {
+  stroke: #d6d3d1 !important;
+}
+html.light .stroke-amber-500 {
+  stroke: #d97706 !important;
+}
+html.light .fill-stone-900 {
+  fill: #f5f5f4 !important;
+}
+
+/* Inputs, Textareas, & Selects */
+html.light input,
+html.light textarea,
+html.light select {
+  background-color: #ffffff !important;
+  color: #0c0a09 !important;
+  border-color: #a8a29e !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #78716c !important;
+}
+
+/* Interactive Hovers */
+html.light .hover\:bg-stone-800:hover {
+  background-color: #e7e5e4 !important;
+}
+
+html.light .hover\:bg-stone-900:hover {
+  background-color: #f5f5f4 !important;
+}
+
+html.light .hover\:text-stone-100:hover {
+  color: #0c0a09 !important;
+}
+
+html.light .hover\:text-stone-200:hover {
+  color: #1c1917 !important;
+}
+
+/* Modals */
+html.light .fixed.inset-0.bg-black\/80 {
+  background-color: rgba(12, 10, 9, 0.5) !important;
+}
+
+/* Scrollbars in Light Mode */
+html.light ::-webkit-scrollbar-track {
+  background: #f5f5f4;
+}
+html.light ::-webkit-scrollbar-thumb {
+  background: #d6d3d1;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #b45309;
 }

@@ -179,20 +179,20 @@ const DEFAULT_SCRIPTURES: ScripturePrompt[] = [
           <div class="text-5xl sm:text-7xl md:text-8xl font-mono font-bold tracking-tight text-stone-100 tabular-nums">
             {{ formatTimeDisplay() }}
           </div>
-          <div class="flex items-center justify-center gap-3 text-xs text-stone-400">
+          <div class="flex items-center justify-center gap-3 text-xs text-stone-400 font-mono tabular-nums">
             @if (timerMode() === 'countdown') {
               <span>
-                {{ Math.floor(countdownTargetMinutes()) }}m Target
-                · {{ Math.floor(elapsedSeconds() / 60) }}m Completed
+                {{ firebaseService.formatOneDecimal(countdownTargetMinutes()) }}m Target
+                · {{ firebaseService.formatOneDecimal(elapsedSeconds() / 60) }}m Completed
               </span>
             } @else {
               <span>
-                Elapsed: {{ Math.floor(elapsedSeconds() / 60) }} mins
-                ({{ (elapsedSeconds() / 3600).toFixed(2) }} hrs)
+                Elapsed: {{ firebaseService.formatOneDecimal(elapsedSeconds() / 60) }} mins
+                ({{ firebaseService.formatOneDecimal(elapsedSeconds() / 3600) }} hrs)
               </span>
             }
             <span aria-hidden="true">·</span>
-            <span class="text-amber-400">
+            <span class="text-amber-400 font-sans">
               {{ isRunning() ? 'Prayer Active' : (elapsedSeconds() > 0 ? 'Paused' : 'Ready') }}
             </span>
           </div>
@@ -313,7 +313,7 @@ const DEFAULT_SCRIPTURES: ScripturePrompt[] = [
           <input
             type="text"
             [formControl]="customTopicControl"
-            placeholder="Type a topic: e.g. Peace in decision making, Healing, Family unity..."
+            placeholder="Topic (e.g. Peace)"
             class="flex-1 bg-stone-900 border border-stone-700 rounded-xl px-4 py-2.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
             (keyup.enter)="fetchAssistance()"
           />

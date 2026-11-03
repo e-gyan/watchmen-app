@@ -4,11 +4,12 @@
 .env*
 !.env.example
 
-# Compiled output
+# Compiled output & runtime data
 /dist
 /tmp
 /out-tsc
 /bazel-out
+/.data
 
 # Node
 node_modules/

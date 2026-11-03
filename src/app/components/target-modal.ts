@@ -183,13 +183,13 @@ import { FirebaseService } from '../services/firebase.service';
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label for="pTitle" class="block text-xs font-medium text-stone-400 mb-1">
-                  Covenant Name
+                  Target Name
                 </label>
                 <input
                   id="pTitle"
                   type="text"
                   formControlName="periodTitle"
-                  placeholder="e.g. Year 2026 Covenant"
+                  placeholder="2026 Goal"
                   class="w-full bg-stone-900 border border-stone-700 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
                 />
               </div>
