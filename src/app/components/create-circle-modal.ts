@@ -20,16 +20,16 @@ import { FirebaseService } from '../services/firebase.service';
       aria-modal="true"
     >
       <div
-        class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-6"
+        class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-5"
       >
         <!-- Modal Header -->
         <div class="flex items-center justify-between border-b border-stone-800/80 pb-4">
           <div>
             <span class="text-xs font-semibold tracking-wider uppercase text-amber-500">
-              Prayer Circle Covenant
+              Prayer Altar Setup
             </span>
             <h2 class="text-xl sm:text-2xl font-serif font-bold text-stone-100">
-              Establish Prayer Partnership
+              Create Prayer Circle
             </h2>
           </div>
           <button
@@ -42,16 +42,58 @@ import { FirebaseService } from '../services/firebase.service';
           </button>
         </div>
 
-        <p class="text-xs text-stone-400 leading-relaxed">
-          Create a shared prayer altar and link your partner's email address (or multiple partners). When they sign in with their Google account, they will automatically see this circle, log sessions, and track advancing targets together.
-        </p>
-
         <!-- Form -->
         <form [formGroup]="form" (ngSubmit)="submit()" class="space-y-4">
+          <!-- Circle Type Selection: Individual vs With Partner -->
+          <div>
+            <span class="block text-xs font-medium text-stone-300 mb-1.5">
+              Circle Visibility &amp; Scope
+            </span>
+            <div class="grid grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                (click)="setCircleType('individual')"
+                class="flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all"
+                [class]="
+                  circleType() === 'individual'
+                    ? 'bg-amber-500/15 border-amber-500 text-amber-300'
+                    : 'bg-stone-950 border-stone-800 text-stone-400 hover:text-stone-200'
+                "
+              >
+                <div class="flex items-center gap-1.5 text-xs font-bold">
+                  <mat-icon style="font-size: 16px;">lock</mat-icon>
+                  <span>Individual (Private)</span>
+                </div>
+                <span class="text-[11px] text-stone-400 leading-tight">
+                  Your private prayer space alone.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                (click)="setCircleType('partner')"
+                class="flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all"
+                [class]="
+                  circleType() === 'partner'
+                    ? 'bg-amber-500/15 border-amber-500 text-amber-300'
+                    : 'bg-stone-950 border-stone-800 text-stone-400 hover:text-stone-200'
+                "
+              >
+                <div class="flex items-center gap-1.5 text-xs font-bold">
+                  <mat-icon style="font-size: 16px;">groups</mat-icon>
+                  <span>With Partner</span>
+                </div>
+                <span class="text-[11px] text-stone-400 leading-tight">
+                  Shared only with invited partners.
+                </span>
+              </button>
+            </div>
+          </div>
+
           <!-- Circle Name -->
           <div>
             <label for="circleName" class="block text-xs font-medium text-stone-300 mb-1.5">
-              Circle Name
+              {{ circleType() === 'individual' ? 'Private Space Name' : 'Circle Name' }}
             </label>
             <input
               id="circleName"
@@ -62,22 +104,29 @@ import { FirebaseService } from '../services/firebase.service';
             />
           </div>
 
-          <!-- Partner Emails -->
-          <div>
-            <label for="partnerEmails" class="block text-xs font-medium text-stone-300 mb-1.5">
-              Partner Emails (comma-separated)
-            </label>
-            <input
-              id="partnerEmails"
-              type="text"
-              formControlName="partnerEmails"
-              placeholder="partner@email.com"
-              class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
-            />
-            <p class="text-[11px] text-stone-500 mt-1">
-              Your own email is automatically included.
-            </p>
-          </div>
+          <!-- Partner Emails (Only shown when With Partner is selected) -->
+          @if (circleType() === 'partner') {
+            <div>
+              <label for="partnerEmails" class="block text-xs font-medium text-stone-300 mb-1.5">
+                Partner Emails (comma-separated)
+              </label>
+              <input
+                id="partnerEmails"
+                type="text"
+                formControlName="partnerEmails"
+                placeholder="partner@email.com"
+                class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
+              />
+              <p class="text-[11px] text-stone-500 mt-1">
+                Only you and the listed partner email(s) can see and access this circle.
+              </p>
+            </div>
+          } @else {
+            <div class="p-3 rounded-xl bg-stone-950 border border-stone-800/80 text-xs text-stone-400 flex items-center gap-2">
+              <mat-icon class="text-amber-400 shrink-0" style="font-size: 16px;">verified_user</mat-icon>
+              <span>Private space: Only your account can view or log records in this space.</span>
+            </div>
+          }
 
           <!-- Target Milestone -->
           <div class="p-3.5 rounded-xl bg-stone-950 border border-stone-800/80 space-y-3">
@@ -122,7 +171,7 @@ import { FirebaseService } from '../services/firebase.service';
                 class="w-full bg-stone-900 border border-stone-700 rounded-lg px-2.5 py-1.5 text-sm font-mono text-amber-400"
               />
               <span class="text-[11px] text-stone-500 mt-0.5 block">
-                Default: 100 Hours for Year 2026.
+                Default: 100.0 Hours for Year 2026.
               </span>
             </div>
           </div>
@@ -148,8 +197,8 @@ import { FirebaseService } from '../services/firebase.service';
               [disabled]="form.invalid || isSubmitting()"
               class="flex items-center gap-2 py-2 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 disabled:pointer-events-none transition-all shadow-md"
             >
-              <mat-icon style="font-size: 18px;">handshake</mat-icon>
-              <span>{{ isSubmitting() ? 'Connecting...' : 'Establish Circle' }}</span>
+              <mat-icon style="font-size: 18px;">{{ circleType() === 'individual' ? 'lock' : 'handshake' }}</mat-icon>
+              <span>{{ isSubmitting() ? 'Saving...' : (circleType() === 'individual' ? 'Create Private Space' : 'Establish Circle') }}</span>
             </button>
           </div>
         </form>
@@ -163,6 +212,7 @@ export class CreateCircleModal {
   readonly dismiss = output<void>();
   readonly created = output<string>();
 
+  readonly circleType = signal<'individual' | 'partner'>('partner');
   readonly isSubmitting = signal(false);
   readonly errorMessage = signal<string | null>(null);
 
@@ -188,26 +238,47 @@ export class CreateCircleModal {
     }),
   });
 
+  setCircleType(type: 'individual' | 'partner') {
+    this.circleType.set(type);
+    const currentName = this.form.controls.name.value;
+    if (type === 'individual' && currentName === 'Watchman Prayer Circle') {
+      this.form.controls.name.setValue('My Private Altar');
+    } else if (type === 'partner' && currentName === 'My Private Altar') {
+      this.form.controls.name.setValue('Watchman Prayer Circle');
+    }
+  }
+
   async submit() {
     if (this.form.invalid) return;
-    this.isSubmitting.set(true);
-    this.errorMessage.set(null);
-
+    const mode = this.circleType();
     const val = this.form.getRawValue();
     const emails = val.partnerEmails
       .split(',')
       .map((e) => e.trim().toLowerCase())
       .filter((e) => e.length > 0 && e.includes('@'));
 
+    if (mode === 'partner' && emails.length === 0) {
+      this.errorMessage.set('Please enter at least one partner email, or choose Individual (Private).');
+      return;
+    }
+
+    this.isSubmitting.set(true);
+    this.errorMessage.set(null);
+
     try {
-      const pId = await this.firebaseService.createPartnership(val.name, emails, {
-        dailyMinutes: val.dailyMinutes,
-        weeklyMinutes: val.weeklyHours * 60,
-        periodTitle: 'Year 2026 Milestone Covenant',
-        periodTargetMinutes: val.periodHours * 60,
-        periodStartDate: '2026-01-01',
-        periodEndDate: '2026-12-31',
-      });
+      const pId = await this.firebaseService.createPartnership(
+        val.name,
+        emails,
+        {
+          dailyMinutes: val.dailyMinutes,
+          weeklyMinutes: val.weeklyHours * 60,
+          periodTitle: 'Year 2026 Milestone Covenant',
+          periodTargetMinutes: val.periodHours * 60,
+          periodStartDate: '2026-01-01',
+          periodEndDate: '2026-12-31',
+        },
+        mode
+      );
       this.isSubmitting.set(false);
       this.created.emit(pId);
       this.dismiss.emit();

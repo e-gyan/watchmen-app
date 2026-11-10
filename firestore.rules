@@ -24,10 +24,6 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
     // Validation helpers
     function isValidUser(data) {
       return data.uid is string && data.uid.size() <= 128 &&
@@ -68,6 +64,31 @@ service cloud.firestore {
              data.status is string && data.status.size() <= 32;
     }
 
+    function isValidMessageRecord(data) {
+      return data.partnershipId is string && data.partnershipId.size() <= 128 &&
+             data.authorUid is string && data.authorUid.size() <= 128 &&
+             data.title is string && data.title.size() <= 256 &&
+             data.durationMinutes is number && data.durationMinutes > 0 && data.durationMinutes <= 100000 &&
+             data.date is string && data.date.size() <= 32;
+    }
+
+    function isValidAuthority(data) {
+      return data.partnershipId is string && data.partnershipId.size() <= 128 &&
+             data.authorUid is string && data.authorUid.size() <= 128 &&
+             data.authorityName is string && data.authorityName.size() <= 128 &&
+             data.yearTargetAmount is number && data.yearTargetAmount >= 0 &&
+             data.mode is string && data.mode.size() <= 32;
+    }
+
+    function isValidSeedRecord(data) {
+      return data.partnershipId is string && data.partnershipId.size() <= 128 &&
+             data.authorityId is string && data.authorityId.size() <= 128 &&
+             data.authorUid is string && data.authorUid.size() <= 128 &&
+             data.amount is number && data.amount > 0 &&
+             data.date is string && data.date.size() <= 32 &&
+             data.mode is string && data.mode.size() <= 32;
+    }
+
     // Users Collection
     match /users/{userId} {
       allow get, list: if isSignedIn();
@@ -75,9 +96,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Partnerships Collection
+    // Partnerships Collection (Circle privacy enforced by membership)
     match /partnerships/{partnershipId} {
-      allow get, list: if isSignedIn();
+      allow get, list: if isSignedIn() && (
+        request.auth.uid in existing().memberUids ||
+        (request.auth.token.email != null && request.auth.token.email.lower() in existing().memberEmails) ||
+        existing().createdBy == request.auth.uid
+      );
       allow create: if isSignedIn() && incoming().createdBy == request.auth.uid && isValidPartnership(incoming());
       allow update: if isSignedIn() && (
         request.auth.uid in existing().memberUids ||
@@ -98,7 +123,6 @@ service cloud.firestore {
       match /testimonies/{testimonyId} {
         allow get, list: if isSignedIn();
         allow create: if isSignedIn() && incoming().authorUid == request.auth.uid && isValidTestimony(incoming());
-        // Partners can increment amensCount / amenUids; author can update testimony content
         allow update: if isSignedIn() && (
           existing().authorUid == request.auth.uid ||
           incoming().diff(existing()).affectedKeys().hasOnly(['amensCount', 'amenUids'])
@@ -110,8 +134,31 @@ service cloud.firestore {
       match /requests/{requestId} {
         allow get, list: if isSignedIn();
         allow create: if isSignedIn() && incoming().authorUid == request.auth.uid && isValidRequest(incoming());
-        // Partners can update status / answeredTestimonyId; author can update request details
         allow update: if isSignedIn();
+        allow delete: if isSignedIn() && existing().authorUid == request.auth.uid;
+      }
+
+      // Subcollection: Message Listening Records
+      match /messages/{messageId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && incoming().authorUid == request.auth.uid && isValidMessageRecord(incoming());
+        allow update: if isSignedIn() && isValidMessageRecord(incoming());
+        allow delete: if isSignedIn() && existing().authorUid == request.auth.uid;
+      }
+
+      // Subcollection: Authority Figure Seed Targets
+      match /authorities/{authorityId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && incoming().authorUid == request.auth.uid && isValidAuthority(incoming());
+        allow update: if isSignedIn() && isValidAuthority(incoming());
+        allow delete: if isSignedIn() && existing().authorUid == request.auth.uid;
+      }
+
+      // Subcollection: Seed Giving Records
+      match /seeds/{seedId} {
+        allow get, list: if isSignedIn();
+        allow create: if isSignedIn() && incoming().authorUid == request.auth.uid && isValidSeedRecord(incoming());
+        allow update: if isSignedIn() && existing().authorUid == request.auth.uid && isValidSeedRecord(incoming());
         allow delete: if isSignedIn() && existing().authorUid == request.auth.uid;
       }
     }

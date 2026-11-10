@@ -9,6 +9,7 @@ export interface AppUser {
 export interface Partnership {
   id: string;
   name: string;
+  circleType?: 'individual' | 'partner'; // 'individual' = private space, 'partner' = shared with partner(s)
   createdBy: string;
   memberUids: string[];
   memberEmails: string[];
@@ -73,6 +74,50 @@ export interface PrayerRequest {
   assignedPartner: string;
   notes: string;
   answeredTestimonyId?: string;
+  createdAt: string;
+}
+
+export interface MessageListeningRecord {
+  id: string;
+  partnershipId: string;
+  authorUid: string;
+  authorName: string;
+  title: string;
+  speaker?: string;
+  durationMinutes: number;            // cumulative total minutes spent on this message
+  initialDurationMinutes?: number;    // initial single-listen duration in minutes
+  listenCount?: number;               // number of listenings / repeats
+  date: string;
+  notes?: string;
+  wasTogether: boolean;
+  createdAt: string;
+}
+
+export interface AuthorityFigureSeed {
+  id: string;
+  partnershipId: string;
+  authorUid: string;
+  authorName: string;
+  authorityName: string;
+  roleTitle?: string;
+  currency: string;
+  yearTargetAmount: number;
+  targetYear: string;
+  mode: 'individual' | 'partner';
+  createdAt: string;
+}
+
+export interface SeedGivingRecord {
+  id: string;
+  partnershipId: string;
+  authorityId: string;
+  authorityName: string;
+  authorUid: string;
+  authorName: string;
+  amount: number;
+  date: string;
+  mode: 'individual' | 'partner';
+  notes?: string;
   createdAt: string;
 }
 

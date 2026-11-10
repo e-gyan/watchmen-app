@@ -23,18 +23,38 @@ interface CloudStoreData {
   sessions: Record<string, Record<string, unknown>[]>;
   testimonies: Record<string, Record<string, unknown>[]>;
   requests: Record<string, Record<string, unknown>[]>;
+  messages: Record<string, Record<string, unknown>[]>;
+  authorities: Record<string, Record<string, unknown>[]>;
+  seeds: Record<string, Record<string, unknown>[]>;
 }
 
 function loadCloudStore(): CloudStoreData {
   try {
     if (existsSync(storeFile)) {
       const raw = readFileSync(storeFile, 'utf-8');
-      return JSON.parse(raw) as CloudStoreData;
+      const parsed = JSON.parse(raw) as Partial<CloudStoreData>;
+      return {
+        partnerships: parsed.partnerships || [],
+        sessions: parsed.sessions || {},
+        testimonies: parsed.testimonies || {},
+        requests: parsed.requests || {},
+        messages: parsed.messages || {},
+        authorities: parsed.authorities || {},
+        seeds: parsed.seeds || {},
+      };
     }
   } catch {
     // ignore read error
   }
-  return { partnerships: [], sessions: {}, testimonies: {}, requests: {} };
+  return {
+    partnerships: [],
+    sessions: {},
+    testimonies: {},
+    requests: {},
+    messages: {},
+    authorities: {},
+    seeds: {},
+  };
 }
 
 function saveCloudStore(data: CloudStoreData): void {
@@ -71,9 +91,67 @@ app.get('/api/health', (_req, res) => {
 });
 
 /**
+ * Live FX Rates to GHS (Ghanaian Cedi) with 30-minute server cache
+ */
+const DEFAULT_TO_GHS: Record<string, number> = {
+  GHS: 1,
+  USD: 15.8,
+  GBP: 20.1,
+  EUR: 17.1,
+  NGN: 0.01,
+};
+
+let cachedFx: {
+  toGhs: Record<string, number>;
+  updatedAt: string;
+  source: 'live' | 'fallback';
+  fetchedAtMs: number;
+} | null = null;
+
+app.get('/api/fx-rates', async (_req, res) => {
+  const now = Date.now();
+  if (cachedFx && now - cachedFx.fetchedAtMs < 30 * 60 * 1000) {
+    return res.json(cachedFx);
+  }
+
+  try {
+    const response = await fetch('https://open.er-api.com/v6/latest/GHS');
+    if (response.ok) {
+      const data = (await response.json()) as {
+        rates?: Record<string, number>;
+        time_last_update_utc?: string;
+      };
+      if (data.rates) {
+        const toGhs: Record<string, number> = { ...DEFAULT_TO_GHS, GHS: 1 };
+        for (const [code, rateFromGhs] of Object.entries(data.rates)) {
+          if (typeof rateFromGhs === 'number' && rateFromGhs > 0) {
+            toGhs[code] = Number((1 / rateFromGhs).toFixed(4));
+          }
+        }
+        cachedFx = {
+          toGhs,
+          updatedAt: data.time_last_update_utc || new Date().toISOString(),
+          source: 'live',
+          fetchedAtMs: now,
+        };
+        return res.json(cachedFx);
+      }
+    }
+  } catch {
+    // Fallback if external rate service is unreachable
+  }
+
+  return res.json({
+    toGhs: DEFAULT_TO_GHS,
+    updatedAt: new Date().toISOString(),
+    source: 'fallback',
+    fetchedAtMs: now,
+  });
+});
+
+/**
  * Render Fallback Cloud Sync Endpoint (allows partners signed in via Email/Name
- * on Render to sync prayer circles, sessions, testimonies, and requests even before
- * adding the Render domain to Firebase Console Authorized Domains).
+ * on Render to sync prayer circles, sessions, testimonies, requests, messages, and seeds).
  */
 app.get('/api/cloud-sync', (req, res) => {
   const email = String(req.query['email'] || '').toLowerCase().trim();
@@ -84,7 +162,7 @@ app.get('/api/cloud-sync', (req, res) => {
         const emails = Array.isArray(p['memberEmails']) ? (p['memberEmails'] as string[]) : [];
         return emails.map((e) => e.toLowerCase()).includes(email);
       })
-    : memoryStore.partnerships;
+    : [];
 
   if (partnershipId) {
     return res.json({
@@ -92,6 +170,9 @@ app.get('/api/cloud-sync', (req, res) => {
       sessions: memoryStore.sessions[partnershipId] || [],
       testimonies: memoryStore.testimonies[partnershipId] || [],
       requests: memoryStore.requests[partnershipId] || [],
+      messages: memoryStore.messages[partnershipId] || [],
+      authorities: memoryStore.authorities[partnershipId] || [],
+      seeds: memoryStore.seeds[partnershipId] || [],
     });
   }
 
@@ -114,8 +195,11 @@ app.post('/api/cloud-sync', (req, res) => {
     return res.json({ ok: true });
   }
 
-  if (partnershipId && (type === 'sessions' || type === 'testimonies' || type === 'requests') && item && item.id) {
-    const collectionMap = memoryStore[type as 'sessions' | 'testimonies' | 'requests'];
+  const validTypes = ['sessions', 'testimonies', 'requests', 'messages', 'authorities', 'seeds'] as const;
+  type SubColType = (typeof validTypes)[number];
+
+  if (partnershipId && validTypes.includes(type as SubColType) && item && item.id) {
+    const collectionMap = memoryStore[type as SubColType];
     if (!collectionMap[partnershipId]) {
       collectionMap[partnershipId] = [];
     }

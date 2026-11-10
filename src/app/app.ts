@@ -23,12 +23,13 @@ import { TargetModal } from './components/target-modal';
 import { RequestModal } from './components/request-modal';
 import { CreateCircleModal } from './components/create-circle-modal';
 import { AddPartnerModal } from './components/add-partner-modal';
-import { PrayerSanctuary } from './components/prayer-sanctuary';
+import { MessagesTracker } from './components/messages-tracker';
+import { SeedTracker } from './components/seed-tracker';
 import { ThemeToggle } from './components/theme-toggle';
 import { AuthModal } from './components/auth-modal';
 import { ThemeService } from './services/theme.service';
 
-export type AppTab = 'dashboard' | 'sanctuary' | 'journal' | 'testimonies' | 'covenant';
+export type AppTab = 'dashboard' | 'messages' | 'seeds' | 'journal' | 'testimonies' | 'covenant';
 
 @Component({
   selector: 'app-root',
@@ -43,7 +44,8 @@ export type AppTab = 'dashboard' | 'sanctuary' | 'journal' | 'testimonies' | 'co
     RequestModal,
     CreateCircleModal,
     AddPartnerModal,
-    PrayerSanctuary,
+    MessagesTracker,
+    SeedTracker,
     ThemeToggle,
     AuthModal,
   ],
@@ -57,6 +59,9 @@ export class App {
 
   // Active navigation tab
   readonly activeTab = signal<AppTab>('dashboard');
+
+  // Collapsible Header Menu state
+  readonly showHeaderMenu = signal<boolean>(false);
 
   // Journal View Mode: Daily Bundles (grouped by day) vs Timeline Stream
   readonly journalViewMode = signal<'bundles' | 'stream'>('bundles');
@@ -233,7 +238,7 @@ export class App {
     return list;
   });
 
-  // SVG Chart Computations for 7-Day Bar Chart
+  // SVG Chart Computations for 5-Day Bar Chart
   readonly chart7DaysMaxMins = computed(() => {
     const bars = this.firebaseService.past7DaysData();
     const p = this.firebaseService.activePartnership();
@@ -242,7 +247,7 @@ export class App {
     return Math.max(90, maxVal);
   });
 
-  // SVG Chart Computations for 8-Week Trend Chart
+  // SVG Chart Computations for 2-Week Trend Chart
   readonly chart8WeeksMaxMins = computed(() => {
     const weeks = this.firebaseService.past8WeeksData();
     const p = this.firebaseService.activePartnership();
@@ -251,20 +256,56 @@ export class App {
     return Math.max(480, maxVal);
   });
 
-  // Switch Active Tab
+  toggleHeaderMenu() {
+    this.showHeaderMenu.update((v) => !v);
+  }
+
+  closeHeaderMenu() {
+    this.showHeaderMenu.set(false);
+  }
+
+  // Switch Active Tab & Collapse Header Menu
   setTab(tab: AppTab) {
     this.activeTab.set(tab);
+    this.showHeaderMenu.set(false);
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
 
+  selectCircleFromMenu(partnershipId: string) {
+    this.firebaseService.selectPartnership(partnershipId);
+    this.showHeaderMenu.set(false);
+  }
+
+  selectFilterMemberFromMenu(member: string) {
+    this.firebaseService.setActiveFilterMember(member);
+    this.showHeaderMenu.set(false);
+  }
+
+  openCreateCircleFromMenu() {
+    this.showHeaderMenu.set(false);
+    this.showCreateCircleModal.set(true);
+  }
+
+  openAddPartnerFromMenu() {
+    this.showHeaderMenu.set(false);
+    this.showAddPartnerModal.set(true);
+  }
+
+  openTargetsFromMenu() {
+    this.showHeaderMenu.set(false);
+    this.showTargetModal.set(true);
+  }
+
   // Auth actions
   openSignInModal() {
+    this.showHeaderMenu.set(false);
     this.showAuthModal.set(true);
   }
 
   async signInWithGoogle() {
+    this.showHeaderMenu.set(false);
     try {
       const user = await this.firebaseService.loginWithGoogle();
       if (user) {
@@ -272,12 +313,12 @@ export class App {
       }
     } catch (err) {
       console.error('Sign in failed', err);
-      // Automatically open the Sign-In & Render Setup Modal so the user can sign in with Email immediately or copy their Render domain
       this.showAuthModal.set(true);
     }
   }
 
   async signOut() {
+    this.showHeaderMenu.set(false);
     try {
       await this.firebaseService.logout();
       this.showToast('Signed out of prayer session.');
@@ -288,6 +329,7 @@ export class App {
 
   // Quick action: open session log modal
   openNewSessionModal(mins = 0, date: string | null = null) {
+    this.showHeaderMenu.set(false);
     if (!this.firebaseService.isAuthenticated()) {
       this.showAuthModal.set(true);
       return;

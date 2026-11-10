@@ -15,11 +15,12 @@
     },
     "Partnership": {
       "title": "Partnership",
-      "description": "Accountability covenant connecting two or more prayer partners",
+      "description": "Accountability covenant for individual private space or shared prayer partners",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
         "name": { "type": "string", "maxLength": 128 },
+        "circleType": { "type": "string", "maxLength": 32 },
         "createdBy": { "type": "string", "maxLength": 128 },
         "memberUids": { "type": "array" },
         "memberEmails": { "type": "array" },
@@ -96,6 +97,65 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "partnershipId", "authorUid", "authorName", "title", "status", "category", "dateAdded"]
+    },
+    "MessageListeningRecord": {
+      "title": "MessageListeningRecord",
+      "description": "Record of hours and minutes spent listening to a spiritual message, supporting repeats and time additions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "partnershipId": { "type": "string", "maxLength": 128 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "speaker": { "type": "string", "maxLength": 128 },
+        "durationMinutes": { "type": "number" },
+        "initialDurationMinutes": { "type": "number" },
+        "listenCount": { "type": "number" },
+        "date": { "type": "string", "maxLength": 32 },
+        "notes": { "type": "string", "maxLength": 2048 },
+        "wasTogether": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "partnershipId", "authorUid", "authorName", "title", "durationMinutes", "date"]
+    },
+    "AuthorityFigureSeed": {
+      "title": "AuthorityFigureSeed",
+      "description": "Authority figure specification with year-end seed target amount",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "partnershipId": { "type": "string", "maxLength": 128 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "authorityName": { "type": "string", "maxLength": 128 },
+        "roleTitle": { "type": "string", "maxLength": 128 },
+        "currency": { "type": "string", "maxLength": 16 },
+        "yearTargetAmount": { "type": "number" },
+        "targetYear": { "type": "string", "maxLength": 16 },
+        "mode": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "partnershipId", "authorUid", "authorityName", "yearTargetAmount", "mode"]
+    },
+    "SeedGivingRecord": {
+      "title": "SeedGivingRecord",
+      "description": "Individual or partner seed offering given to a specified authority figure",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "partnershipId": { "type": "string", "maxLength": 128 },
+        "authorityId": { "type": "string", "maxLength": 128 },
+        "authorityName": { "type": "string", "maxLength": 128 },
+        "authorUid": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "maxLength": 32 },
+        "mode": { "type": "string", "maxLength": 32 },
+        "notes": { "type": "string", "maxLength": 1024 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "partnershipId", "authorityId", "authorityName", "authorUid", "amount", "date", "mode"]
     }
   },
   "firestore": {
@@ -118,6 +178,18 @@
     "/partnerships/{partnershipId}/requests/{requestId}": {
       "schema": "PrayerRequest",
       "description": "Active intercession requests on the altar"
+    },
+    "/partnerships/{partnershipId}/messages/{messageId}": {
+      "schema": "MessageListeningRecord",
+      "description": "Message listening records with title, duration, and date"
+    },
+    "/partnerships/{partnershipId}/authorities/{authorityId}": {
+      "schema": "AuthorityFigureSeed",
+      "description": "Authority figures and their year-end seed target amounts"
+    },
+    "/partnerships/{partnershipId}/seeds/{seedId}": {
+      "schema": "SeedGivingRecord",
+      "description": "Seeds sown toward specified authority figures"
     }
   }
 }

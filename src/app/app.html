@@ -1,76 +1,306 @@
 <div class="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans">
-  <!-- Top Navigation Bar (Horizontally scrollable, zero overlap) -->
-  <header class="sticky top-0 z-40 w-full bg-stone-950/95 backdrop-blur-md border-b border-stone-800/80 px-4 sm:px-6 py-3 overflow-x-auto">
-    <div class="flex items-center justify-between gap-4 min-w-max mx-auto max-w-7xl">
-      <!-- Zone 1: Wordmark & Brand -->
-      <button
-        type="button"
-        (click)="setTab('dashboard')"
-        class="text-left group flex items-center gap-2 whitespace-nowrap shrink-0 focus:outline-none"
-      >
-        <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-colors shrink-0">
-          <mat-icon style="font-size: 20px;">local_fire_department</mat-icon>
-        </div>
-        <div class="shrink-0">
-          <span class="text-base sm:text-lg font-serif font-bold tracking-tight text-stone-100 group-hover:text-amber-400 transition-colors">
-            WATCHMAN
-          </span>
-          <span class="hidden xl:inline text-xs text-stone-500 ml-1.5">Prayer Altar</span>
-        </div>
-      </button>
-
-      <!-- Account, Theme & Primary CTA -->
-      <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
-        <!-- Theme Toggle Component -->
-        <app-theme-toggle class="shrink-0" />
-
-        @if (firebaseService.isAuthenticated()) {
-          <!-- User avatar / profile button -->
-          <div class="flex items-center gap-1.5 pr-1 border-r border-stone-800 shrink-0">
-            <div
-              class="w-7 h-7 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center text-xs font-bold shrink-0"
-              [title]="firebaseService.currentUser()?.email"
-            >
-              {{ currentUserName().slice(0, 1).toUpperCase() }}
-            </div>
-            <span class="hidden sm:inline text-xs font-medium text-stone-200 max-w-[120px] truncate">
-              {{ currentUserName() }}
-            </span>
-            <button
-              type="button"
-              (click)="signOut()"
-              class="p-1.5 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-lg transition-colors shrink-0"
-              title="Sign Out"
-              aria-label="Sign Out"
-            >
-              <mat-icon style="font-size: 18px;">logout</mat-icon>
-            </button>
-          </div>
-        } @else {
-          <button
-            type="button"
-            (click)="openSignInModal()"
-            class="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-medium bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-700 transition-colors shrink-0"
-          >
-            <mat-icon style="font-size: 16px;">account_circle</mat-icon>
-            <span>Sign In</span>
-          </button>
-        }
-
+  <!-- Top Header with Collapsible Menu (Tap to open, collapses on any selection) -->
+  <header class="sticky top-0 z-40 w-full bg-stone-950/95 backdrop-blur-md border-b border-stone-800/80 px-4 sm:px-6 py-3">
+    <div class="flex items-center justify-between gap-3 mx-auto max-w-7xl">
+      <!-- Left: Brand + Active Circle Badge -->
+      <div class="flex items-center gap-3 min-w-0">
         <button
           type="button"
-          (click)="openNewSessionModal()"
-          class="flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-md whitespace-nowrap shrink-0"
+          (click)="setTab('dashboard')"
+          class="text-left group flex items-center gap-2 shrink-0 focus:outline-none"
         >
-          <mat-icon style="font-size: 18px;">add</mat-icon>
-          <span>Log Prayer</span>
+          <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-colors shrink-0">
+            <mat-icon style="font-size: 20px;">local_fire_department</mat-icon>
+          </div>
+          <div class="shrink-0">
+            <span class="text-base sm:text-lg font-serif font-bold tracking-tight text-stone-100 group-hover:text-amber-400 transition-colors">
+              WATCHMAN
+            </span>
+          </div>
+        </button>
+
+        @if (firebaseService.activePartnership(); as activeP) {
+          <button
+            type="button"
+            (click)="toggleHeaderMenu()"
+            class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-900 border border-stone-800 text-xs text-stone-300 hover:border-amber-500/40 transition-colors truncate max-w-[220px]"
+            title="Tap to switch circle or open menu"
+          >
+            <mat-icon class="text-amber-400 shrink-0" style="font-size: 14px;">
+              {{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'lock' : 'groups' }}
+            </mat-icon>
+            <span class="truncate font-medium">{{ activeP.name }}</span>
+          </button>
+        }
+      </div>
+
+      <!-- Right: Collapsible Menu Trigger Button -->
+      <div class="flex items-center gap-2 shrink-0">
+        <button
+          type="button"
+          (click)="toggleHeaderMenu()"
+          class="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-semibold border transition-all shrink-0"
+          [class]="
+            showHeaderMenu()
+              ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+              : 'bg-stone-900 hover:bg-stone-800 border-stone-700 text-stone-200'
+          "
+          [attr.aria-expanded]="showHeaderMenu()"
+          aria-label="Toggle navigation and workspace menu"
+        >
+          <mat-icon style="font-size: 18px;">{{ showHeaderMenu() ? 'expand_less' : 'menu' }}</mat-icon>
+          <span>Menu</span>
         </button>
       </div>
     </div>
+
+    <!-- Collapsible Dropdown Menu Panel (Collapses automatically when any selection is made) -->
+    @if (showHeaderMenu()) {
+      <div class="mx-auto max-w-7xl mt-3 pt-3 border-t border-stone-800/90 space-y-4">
+        <!-- Section 1: Navigation Views -->
+        <div>
+          <span class="block text-[10px] font-semibold uppercase tracking-wider text-stone-500 mb-2">
+            Views
+          </span>
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            <button
+              type="button"
+              (click)="setTab('dashboard')"
+              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
+              [class]="
+                activeTab() === 'dashboard'
+                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
+                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
+              "
+            >
+              <mat-icon style="font-size: 18px;">dashboard</mat-icon>
+              <span>Dashboard</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="setTab('messages')"
+              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
+              [class]="
+                activeTab() === 'messages'
+                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
+                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
+              "
+            >
+              <mat-icon style="font-size: 18px;">headphones</mat-icon>
+              <span>Messages</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="setTab('seeds')"
+              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
+              [class]="
+                activeTab() === 'seeds'
+                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
+                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
+              "
+            >
+              <mat-icon style="font-size: 18px;">volunteer_activism</mat-icon>
+              <span>Seed Altar</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="setTab('journal')"
+              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
+              [class]="
+                activeTab() === 'journal'
+                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
+                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
+              "
+            >
+              <mat-icon style="font-size: 18px;">menu_book</mat-icon>
+              <span>Journal</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="setTab('testimonies')"
+              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
+              [class]="
+                activeTab() === 'testimonies'
+                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
+                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
+              "
+            >
+              <mat-icon style="font-size: 18px;">celebration</mat-icon>
+              <span>Testimonies</span>
+            </button>
+
+            <button
+              type="button"
+              (click)="setTab('covenant')"
+              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
+              [class]="
+                activeTab() === 'covenant'
+                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
+                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
+              "
+            >
+              <mat-icon style="font-size: 18px;">handshake</mat-icon>
+              <span>Covenant</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Section 2: Circle Selection & Privacy Scope (Only when authenticated) -->
+        @if (firebaseService.isAuthenticated()) {
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-2 border-t border-stone-800/80">
+            <!-- Circle Switcher & Actions -->
+            <div class="p-3 rounded-xl bg-stone-900 border border-stone-800 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+                  Circle Space
+                </span>
+                <div class="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    (click)="openCreateCircleFromMenu()"
+                    class="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-medium border border-stone-700"
+                  >
+                    <mat-icon style="font-size: 13px;">add_circle_outline</mat-icon>
+                    <span>New</span>
+                  </button>
+                  @if (firebaseService.activePartnership()) {
+                    <button
+                      type="button"
+                      (click)="openAddPartnerFromMenu()"
+                      class="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 text-[11px] font-medium border border-stone-700"
+                    >
+                      <mat-icon style="font-size: 13px;">person_add</mat-icon>
+                      <span>Partner</span>
+                    </button>
+                    <button
+                      type="button"
+                      (click)="openTargetsFromMenu()"
+                      class="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[11px] font-medium border border-stone-700"
+                    >
+                      <mat-icon style="font-size: 13px;">tune</mat-icon>
+                      <span>Targets</span>
+                    </button>
+                  }
+                </div>
+              </div>
+
+              @if (firebaseService.partnerships().length > 0) {
+                <div class="flex flex-wrap gap-1.5">
+                  @for (p of firebaseService.partnerships(); track p.id) {
+                    <button
+                      type="button"
+                      (click)="selectCircleFromMenu(p.id)"
+                      class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                      [class]="
+                        firebaseService.activePartnershipId() === p.id
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold'
+                          : 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700'
+                      "
+                    >
+                      <mat-icon style="font-size: 14px;">
+                        {{ (p.circleType === 'individual' || p.memberEmails.length <= 1) ? 'lock' : 'groups' }}
+                      </mat-icon>
+                      <span>{{ p.name }}</span>
+                      <span class="text-[10px] opacity-75">
+                        ({{ (p.circleType === 'individual' || p.memberEmails.length <= 1) ? 'Private' : p.memberEmails.length }})
+                      </span>
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+
+            <!-- Partner Scope Filter -->
+            @if (firebaseService.activePartnership(); as activeP) {
+              <div class="p-3 rounded-xl bg-stone-900 border border-stone-800 space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+                    Member Filter
+                  </span>
+                  <span class="text-[11px] font-mono text-amber-400 tabular-nums">
+                    {{ firebaseService.formatHours(firebaseService.periodMinutesLogged()) }} / {{ firebaseService.formatHours(activeP.periodTargetMinutes) }}h ({{ firebaseService.formatOneDecimal(firebaseService.periodProgressPct()) }}%)
+                  </span>
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    (click)="selectFilterMemberFromMenu('all')"
+                    class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                    [class]="
+                      firebaseService.activeFilterMember() === 'all'
+                        ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold'
+                        : 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700'
+                    "
+                  >
+                    {{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'My Records' : 'All Members' }}
+                  </button>
+                  @for (email of activeP.memberEmails; track email) {
+                    <button
+                      type="button"
+                      (click)="selectFilterMemberFromMenu(email.split('@')[0])"
+                      class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all"
+                      [class]="
+                        firebaseService.activeFilterMember() === email.split('@')[0]
+                          ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold'
+                          : 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700'
+                      "
+                    >
+                      {{ email.split('@')[0] }}
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Section 3: Theme Schedule (Auto 6:45 AM Light / 6:45 PM Dark + Manual Toggle) & Account -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-stone-800/80 text-xs">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-stone-400 text-[11px]">
+              Theme (Auto 6:45):
+            </span>
+            <app-theme-toggle (selected)="closeHeaderMenu()" />
+          </div>
+
+          <div class="flex items-center justify-between sm:justify-end gap-3">
+            @if (firebaseService.isAuthenticated()) {
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center text-[11px] font-bold">
+                  {{ currentUserName().slice(0, 1).toUpperCase() }}
+                </div>
+                <span class="text-stone-300 font-medium">{{ firebaseService.currentUser()?.email }}</span>
+              </div>
+              <button
+                type="button"
+                (click)="signOut()"
+                class="flex items-center gap-1 py-1.5 px-3 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700 transition-colors"
+              >
+                <mat-icon style="font-size: 15px;">logout</mat-icon>
+                <span>Sign Out</span>
+              </button>
+            } @else {
+              <button
+                type="button"
+                (click)="openSignInModal()"
+                class="flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl text-xs font-medium bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-700"
+              >
+                <mat-icon style="font-size: 16px;">account_circle</mat-icon>
+                <span>Sign In</span>
+              </button>
+            }
+          </div>
+        </div>
+      </div>
+    }
   </header>
 
-  <!-- Bottom Navigation Bar -->
-  <div class="fixed bottom-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-t border-stone-800 px-3 py-2 flex items-center justify-around">
+  <!-- Bottom Navigation Bar (Replaced Timer with Messages & Seed Altar) -->
+  <div class="fixed bottom-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-t border-stone-800 px-2 py-2 flex items-center justify-around">
     <button
       type="button"
       (click)="setTab('dashboard')"
@@ -82,12 +312,21 @@
     </button>
     <button
       type="button"
-      (click)="setTab('sanctuary')"
+      (click)="setTab('messages')"
       class="flex flex-col items-center gap-0.5 text-[10px] py-1 px-2 rounded-lg transition-colors"
-      [class]="activeTab() === 'sanctuary' ? 'text-amber-400 font-bold' : 'text-stone-400'"
+      [class]="activeTab() === 'messages' ? 'text-amber-400 font-bold' : 'text-stone-400'"
     >
-      <mat-icon style="font-size: 20px;">timer</mat-icon>
-      <span>Timer</span>
+      <mat-icon style="font-size: 20px;">headphones</mat-icon>
+      <span>Messages</span>
+    </button>
+    <button
+      type="button"
+      (click)="setTab('seeds')"
+      class="flex flex-col items-center gap-0.5 text-[10px] py-1 px-2 rounded-lg transition-colors"
+      [class]="activeTab() === 'seeds' ? 'text-amber-400 font-bold' : 'text-stone-400'"
+    >
+      <mat-icon style="font-size: 20px;">volunteer_activism</mat-icon>
+      <span>Seeds</span>
     </button>
     <button
       type="button"
@@ -118,198 +357,78 @@
     </button>
   </div>
 
-  <!-- Workspace Sub-Toolbar: Circle Switcher & Partner Actions (Horizontally scrollable) -->
-  @if (firebaseService.isAuthenticated()) {
-    <div class="bg-stone-900/60 border-b border-stone-800/80 px-4 sm:px-6 py-2 overflow-x-auto text-xs">
-      <div class="flex items-center justify-between gap-4 min-w-max mx-auto max-w-7xl">
-        <!-- Active Circle selector & Partners -->
-        <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
-          @if (firebaseService.partnerships().length > 0) {
-            <!-- Circle Dropdown/Selector -->
-            <div class="flex items-center gap-1.5 bg-stone-950 border border-stone-800 rounded-lg px-2.5 py-1 shrink-0">
-              <mat-icon class="text-amber-400" style="font-size: 16px;">groups</mat-icon>
-              <span class="text-stone-400 text-xs">Circle:</span>
-              <select
-                [value]="firebaseService.activePartnershipId() || ''"
-                (change)="firebaseService.selectPartnership($any($event.target).value)"
-                class="bg-transparent text-xs font-semibold text-stone-100 focus:outline-none cursor-pointer"
-              >
-                @for (p of firebaseService.partnerships(); track p.id) {
-                  <option [value]="p.id" class="bg-stone-900 text-stone-100">{{ p.name }}</option>
-                }
-              </select>
-            </div>
-
-            <!-- Add Partner button -->
-            <button
-              type="button"
-              (click)="showAddPartnerModal.set(true)"
-              class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 transition-colors shrink-0"
-              title="Invite another partner to this circle by email"
-            >
-              <mat-icon style="font-size: 14px;">person_add</mat-icon>
-              <span>Add Partner</span>
-            </button>
-          }
-
-          <!-- New Circle Button -->
-          <button
-            type="button"
-            (click)="showCreateCircleModal.set(true)"
-            class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-stone-800/60 hover:bg-stone-800 text-stone-300 border border-stone-700/60 transition-colors shrink-0"
-          >
-            <mat-icon style="font-size: 14px;">add_circle_outline</mat-icon>
-            <span>New Circle</span>
-          </button>
-
-          <!-- Partner Scope Filter (Combined vs Individual) -->
-          @if (firebaseService.activePartnership()) {
-            <div class="flex items-center p-0.5 bg-stone-950 border border-stone-800 rounded-lg ml-1 shrink-0">
-              <button
-                type="button"
-                (click)="firebaseService.setActiveFilterMember('all')"
-                class="px-2.5 py-1 rounded-md text-xs font-medium transition-all shrink-0"
-                [class]="
-                  firebaseService.activeFilterMember() === 'all'
-                    ? 'bg-stone-800 text-stone-100 shadow-sm'
-                    : 'text-stone-400 hover:text-stone-200'
-                "
-              >
-                Combined Circle
-              </button>
-              @for (email of firebaseService.activePartnership()?.memberEmails || []; track email) {
-                <button
-                  type="button"
-                  (click)="firebaseService.setActiveFilterMember(email.split('@')[0])"
-                  class="px-2.5 py-1 rounded-md text-xs font-medium transition-all truncate max-w-[120px] shrink-0"
-                  [class]="
-                    firebaseService.activeFilterMember() === email.split('@')[0]
-                      ? 'bg-amber-500/20 text-amber-300 font-semibold shadow-sm'
-                      : 'text-stone-400 hover:text-stone-200'
-                  "
-                >
-                  {{ email.split('@')[0] }}
-                </button>
-              }
-            </div>
-          }
-        </div>
-
-        <!-- Target Milestone Status & Edit Targets Button -->
-        @if (firebaseService.activePartnership(); as activeP) {
-          <div class="flex items-center gap-3 text-stone-400 shrink-0 whitespace-nowrap">
-            <div class="flex items-center gap-1.5">
-              <span class="text-stone-500">Milestone:</span>
-              <span class="text-stone-200 font-mono tabular-nums font-semibold">
-                {{ firebaseService.formatHours(firebaseService.periodMinutesLogged()) }} / {{ firebaseService.formatHours(activeP.periodTargetMinutes) }} hrs
-              </span>
-              <span class="text-amber-400 font-semibold font-mono tabular-nums">
-                ({{ firebaseService.formatOneDecimal(firebaseService.periodProgressPct()) }}%)
-              </span>
-            </div>
-
-            <button
-              type="button"
-              (click)="showTargetModal.set(true)"
-              class="flex items-center gap-1 text-stone-400 hover:text-stone-200 hover:underline shrink-0"
-              title="Edit target settings"
-            >
-              <mat-icon style="font-size: 14px;">tune</mat-icon>
-              <span>Targets</span>
-            </button>
-          </div>
-        }
-      </div>
-    </div>
-  }
-
   <!-- Main Container -->
   <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-8 mb-20">
     <!-- CASE 1: USER IS NOT AUTHENTICATED -->
     @if (!firebaseService.isAuthenticated()) {
-      <div class="max-w-2xl mx-auto my-12 p-8 sm:p-12 rounded-3xl bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 border border-amber-500/30 text-center space-y-6 shadow-2xl">
-        <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-          <mat-icon style="font-size: 36px;">local_fire_department</mat-icon>
+      <div class="max-w-xl mx-auto my-12 p-8 sm:p-10 rounded-3xl bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 border border-amber-500/30 text-center space-y-5 shadow-2xl">
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+          <mat-icon style="font-size: 32px;">local_fire_department</mat-icon>
         </div>
         <div>
           <span class="text-xs font-semibold uppercase tracking-widest text-amber-500">
-            Sacred Altar of Prayer & Agreement
+            Prayer &amp; Accountability
           </span>
-          <h1 class="text-3xl sm:text-4xl font-serif font-bold text-stone-100 mt-2">
-            Watchman Prayer Accountability
+          <h1 class="text-3xl font-serif font-bold text-stone-100 mt-1">
+            Watchman
           </h1>
-          <p class="text-stone-400 text-sm mt-3 leading-relaxed max-w-lg mx-auto">
-            Account for hours and minutes in prayer together with your partner or circle. Set daily, weekly, and 100-hour milestone targets, document prayer encounters, and build a permanent praise wall of answered testimonies.
+          <p class="text-stone-400 text-xs sm:text-sm mt-2 max-w-md mx-auto">
+            Track prayer hours, messages, annual seeds, and testimonies alone or with partners.
           </p>
         </div>
 
-        <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div class="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
           <button
             type="button"
             (click)="openSignInModal()"
-            class="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-lg"
+            class="w-full sm:w-auto flex items-center justify-center gap-2 py-2.5 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-lg"
           >
-            <mat-icon style="font-size: 20px;">login</mat-icon>
-            <span>Sign In with Email</span>
+            <mat-icon style="font-size: 18px;">login</mat-icon>
+            <span>Sign In</span>
           </button>
           <button
             type="button"
             (click)="signInWithGoogle()"
-            class="w-full sm:w-auto flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold bg-stone-950 text-stone-100 hover:bg-stone-800 border border-stone-700 active:scale-95 transition-all"
+            class="w-full sm:w-auto flex items-center justify-center gap-2 py-2.5 px-5 rounded-xl text-xs font-semibold bg-stone-950 text-stone-100 hover:bg-stone-800 border border-stone-700 active:scale-95 transition-all"
           >
-            <mat-icon class="text-amber-400" style="font-size: 20px;">account_circle</mat-icon>
-            <span>Sign In with Google</span>
+            <mat-icon class="text-amber-400" style="font-size: 18px;">account_circle</mat-icon>
+            <span>Google Sign In</span>
           </button>
-        </div>
-
-        <div class="pt-4 border-t border-stone-800 text-xs text-stone-500 flex flex-wrap items-center justify-center gap-4">
-          <span class="flex items-center gap-1">
-            <mat-icon class="text-amber-500" style="font-size: 14px;">check</mat-icon> Clean real-time Firestore database
-          </span>
-          <span class="flex items-center gap-1">
-            <mat-icon class="text-amber-500" style="font-size: 14px;">check</mat-icon> Multi-partner circles (&gt;2 partners)
-          </span>
-          <span class="flex items-center gap-1">
-            <mat-icon class="text-amber-500" style="font-size: 14px;">check</mat-icon> Advancing milestone tracking
-          </span>
         </div>
       </div>
     }
 
     <!-- CASE 2: AUTHENTICATED BUT 0 PRAYER CIRCLES -->
     @else if (firebaseService.partnerships().length === 0) {
-      <div class="max-w-2xl mx-auto my-12 p-8 sm:p-12 rounded-3xl bg-stone-900 border border-stone-800 text-center space-y-6 shadow-2xl">
-        <div class="w-16 h-16 mx-auto rounded-2xl bg-stone-800 border border-stone-700 flex items-center justify-center text-amber-400">
-          <mat-icon style="font-size: 36px;">handshake</mat-icon>
+      <div class="max-w-xl mx-auto my-12 p-8 sm:p-10 rounded-3xl bg-stone-900 border border-stone-800 text-center space-y-5 shadow-2xl">
+        <div class="w-14 h-14 mx-auto rounded-2xl bg-stone-800 border border-stone-700 flex items-center justify-center text-amber-400">
+          <mat-icon style="font-size: 32px;">handshake</mat-icon>
         </div>
         <div>
           <span class="text-xs font-semibold uppercase tracking-widest text-amber-500">
-            Welcome, {{ currentUserName() }}!
+            Welcome, {{ currentUserName() }}
           </span>
-          <h2 class="text-2xl sm:text-3xl font-serif font-bold text-stone-100 mt-2">
-            Establish Your First Prayer Circle
+          <h2 class="text-2xl font-serif font-bold text-stone-100 mt-1">
+            Create Your Space
           </h2>
-          <p class="text-stone-400 text-sm mt-3 leading-relaxed max-w-lg mx-auto">
-            You don't have any prayer circles yet. Create one now to set your daily, weekly, and annual hour targets, and invite your prayer partner(s) by email.
+          <p class="text-stone-400 text-xs sm:text-sm mt-2 max-w-md mx-auto">
+            Start a private space or a shared partner circle.
           </p>
         </div>
 
-        <div class="p-4 rounded-xl bg-stone-950 border border-stone-800 max-w-md mx-auto text-xs text-stone-400">
-          <span class="text-stone-500 block mb-1">Your registered email address:</span>
-          <span class="font-mono font-semibold text-stone-200 text-sm">{{ firebaseService.currentUser()?.email }}</span>
-          <p class="text-[11px] text-stone-500 mt-2">
-            If a friend adds this email address as their prayer partner, you will automatically see and share their prayer circle!
-          </p>
+        <div class="p-3.5 rounded-xl bg-stone-950 border border-stone-800 max-w-sm mx-auto text-xs text-stone-400">
+          <span class="text-stone-500 block">Signed in as</span>
+          <span class="font-mono font-semibold text-stone-200">{{ firebaseService.currentUser()?.email }}</span>
         </div>
 
-        <div class="pt-2">
+        <div>
           <button
             type="button"
             (click)="showCreateCircleModal.set(true)"
-            class="flex items-center justify-center gap-2 py-3 px-6 mx-auto rounded-xl font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-lg"
+            class="flex items-center justify-center gap-2 py-2.5 px-5 mx-auto rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-lg"
           >
-            <mat-icon style="font-size: 20px;">add</mat-icon>
-            <span>Create Prayer Circle</span>
+            <mat-icon style="font-size: 18px;">add</mat-icon>
+            <span>New Circle</span>
           </button>
         </div>
       </div>
@@ -319,25 +438,23 @@
     @else {
       <!-- TAB 1: DASHBOARD & TARGETS -->
       @if (activeTab() === 'dashboard') {
-        <div class="space-y-8">
+        <div class="space-y-6">
           @if (firebaseService.activePartnership(); as activeP) {
-            <!-- Hero Period Covenant Card (The 100-Hour Milestone) -->
-            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 border border-amber-500/30 p-6 sm:p-8 shadow-xl">
-              <div class="absolute -right-10 -bottom-10 w-64 h-64 rounded-full bg-amber-500/5 blur-3xl pointer-events-none"></div>
-
-              <div class="relative z-10 space-y-6">
+            <!-- Hero Period Covenant Card -->
+            <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 border border-amber-500/30 p-6 sm:p-7 shadow-xl">
+              <div class="relative z-10 space-y-5">
                 <!-- Header Row -->
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <div class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-amber-500">
-                      <mat-icon style="font-size: 16px;">flag</mat-icon>
+                    <div class="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-500">
+                      <mat-icon style="font-size: 15px;">flag</mat-icon>
                       <span>{{ activeP.periodTitle }}</span>
                     </div>
-                    <h1 class="text-2xl sm:text-3xl font-serif font-bold text-stone-100 mt-1">
-                      {{ firebaseService.formatHours(activeP.periodTargetMinutes) }}-Hour Prayer Covenant
+                    <h1 class="text-2xl sm:text-3xl font-serif font-bold text-stone-100 mt-0.5">
+                      {{ firebaseService.formatHours(activeP.periodTargetMinutes) }}-Hour Goal
                     </h1>
-                    <p class="text-xs text-stone-400 mt-1 max-w-2xl leading-relaxed">
-                      "Again I say to you, if two of you agree on earth about anything they ask, it will be done for them by my Father in heaven." Standing together across all watches.
+                    <p class="text-xs text-stone-400 mt-0.5">
+                      {{ activeP.periodStartDate }} — {{ activeP.periodEndDate }}
                     </p>
                   </div>
 
@@ -347,56 +464,52 @@
                       <div class="text-3xl sm:text-4xl font-serif font-bold text-amber-400 tabular-nums">
                         {{ firebaseService.formatHours(firebaseService.periodMinutesLogged()) }}
                       </div>
-                      <div class="text-[11px] text-stone-400 uppercase tracking-wider">Hours Logged</div>
+                      <div class="text-[10px] text-stone-400 uppercase tracking-wider">Logged (hrs)</div>
                     </div>
                     <div class="text-stone-600 text-2xl font-light">/</div>
                     <div>
                       <div class="text-2xl font-serif font-semibold text-stone-300 tabular-nums">
                         {{ firebaseService.formatHours(activeP.periodTargetMinutes) }}h
                       </div>
-                      <div class="text-[11px] text-stone-500 uppercase tracking-wider">Target Goal</div>
+                      <div class="text-[10px] text-stone-500 uppercase tracking-wider">Target</div>
                     </div>
                   </div>
                 </div>
 
-                <!-- Big Milestone Progress Bar -->
-                <div class="space-y-2">
+                <!-- Milestone Progress Bar -->
+                <div class="space-y-1.5">
                   <div class="flex items-center justify-between text-xs">
                     <span class="font-medium text-stone-300">
-                      Target Completion: <strong class="text-amber-400 font-mono tabular-nums">{{ firebaseService.formatOneDecimal(firebaseService.periodProgressPct()) }}%</strong>
+                      Progress: <strong class="text-amber-400 font-mono tabular-nums">{{ firebaseService.formatOneDecimal(firebaseService.periodProgressPct()) }}%</strong>
                     </span>
                     <span class="text-stone-400 font-mono tabular-nums">
-                      {{ firebaseService.formatHours(firebaseService.periodMinutesRemaining()) }} hours remaining
+                      {{ firebaseService.formatHours(firebaseService.periodMinutesRemaining()) }}h left
                     </span>
                   </div>
 
-                  <!-- Progress bar -->
-                  <div class="h-4 w-full bg-stone-950 rounded-full overflow-hidden border border-stone-800 p-0.5 flex">
+                  <div class="h-3.5 w-full bg-stone-950 rounded-full overflow-hidden border border-stone-800 p-0.5 flex">
                     <div
-                      class="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-500 shadow-sm"
+                      class="h-full bg-gradient-to-r from-amber-600 to-amber-400 rounded-full transition-all duration-500"
                       [style.width.%]="firebaseService.periodProgressPct()"
                     ></div>
                   </div>
                 </div>
 
                 <!-- Analytical Pacing Strip -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-stone-800/80 text-xs">
-                  <!-- Required Pace -->
-                  <div class="space-y-1">
-                    <span class="text-stone-500">Pace Required</span>
+                <div class="grid grid-cols-3 gap-4 pt-2 border-t border-stone-800/80 text-xs">
+                  <div>
+                    <span class="text-stone-500 block">Required Pace</span>
                     <div class="text-stone-200 font-semibold font-mono tabular-nums text-sm">
-                      {{ firebaseService.formatOneDecimal(firebaseService.pacingAnalysis().requiredDailyMins) }} mins / day
+                      {{ firebaseService.formatOneDecimal(firebaseService.pacingAnalysis().requiredDailyMins) }}m / day
                     </div>
-                    <span class="text-[11px] text-stone-500">To reach target by covenant date</span>
                   </div>
 
-                  <!-- Pacing Status -->
-                  <div class="space-y-1">
-                    <span class="text-stone-500">Velocity Status</span>
-                    <div class="flex items-center gap-1.5 text-sm font-semibold">
+                  <div>
+                    <span class="text-stone-500 block">Status</span>
+                    <div class="flex items-center gap-1 text-sm font-semibold">
                       @if (firebaseService.pacingAnalysis().isAhead) {
                         <span class="text-emerald-400 flex items-center gap-1">
-                          <mat-icon style="font-size: 16px;">trending_up</mat-icon> Ahead of Pace
+                          <mat-icon style="font-size: 16px;">trending_up</mat-icon> Ahead
                         </span>
                       } @else {
                         <span class="text-amber-400 flex items-center gap-1">
@@ -404,23 +517,156 @@
                         </span>
                       }
                     </div>
-                    <span class="text-[11px] text-stone-500 font-mono tabular-nums">
-                      Avg {{ firebaseService.formatOneDecimal(firebaseService.pacingAnalysis().avgDailyVelocityMinutes) }}m/day recently
-                    </span>
                   </div>
 
-                  <!-- Days Remaining -->
-                  <div class="space-y-1">
-                    <span class="text-stone-500">Time Horizon</span>
+                  <div>
+                    <span class="text-stone-500 block">Remaining</span>
                     <div class="text-stone-200 font-semibold font-mono tabular-nums text-sm">
-                      {{ firebaseService.pacingAnalysis().daysRemaining }} Days Left
+                      {{ firebaseService.pacingAnalysis().daysRemaining }} days
                     </div>
-                    <span class="text-[11px] text-stone-500">
-                      {{ activeP.periodStartDate }} to {{ activeP.periodEndDate }}
-                    </span>
                   </div>
                 </div>
               </div>
+            </div>
+
+            <!-- High-Level Totals Across All Menu Options (Main Currency: GHS with Live FX Conversion) -->
+            @let seedTotals = firebaseService.seedTotalsSummary();
+            <div class="rounded-2xl bg-stone-900/90 border border-stone-800 p-5 sm:p-6 space-y-4">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
+                    Overview
+                  </span>
+                  <h2 class="text-base sm:text-lg font-serif font-bold text-stone-100">
+                    Menu Totals
+                  </h2>
+                </div>
+                @if (seedTotals.hasForeignCurrency) {
+                  <span class="text-[11px] font-mono text-amber-400 flex items-center gap-1">
+                    <mat-icon style="font-size: 13px;">currency_exchange</mat-icon>
+                    <span>Seeds converted live to GHS</span>
+                  </span>
+                }
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                <!-- 1. Prayer Journal Total -->
+                <button
+                  type="button"
+                  (click)="setTab('journal')"
+                  class="text-left p-4 rounded-xl bg-stone-950 border border-stone-800 hover:border-amber-500/50 transition-all space-y-1 group"
+                >
+                  <div class="flex items-center justify-between text-xs text-stone-400">
+                    <span class="font-semibold uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+                      Journal
+                    </span>
+                    <mat-icon class="text-amber-400" style="font-size: 16px;">menu_book</mat-icon>
+                  </div>
+                  <div class="text-xl font-serif font-bold text-stone-100 tabular-nums">
+                    {{ firebaseService.formatHours(firebaseService.periodMinutesLogged()) }} hrs
+                  </div>
+                  <div class="text-[11px] text-stone-400 font-mono tabular-nums">
+                    {{ firebaseService.filteredSessions().length }} sessions · Today {{ firebaseService.formatMinutes(firebaseService.todayMinutes()) }}
+                  </div>
+                </button>
+
+                <!-- 2. Messages Listening Total -->
+                <button
+                  type="button"
+                  (click)="setTab('messages')"
+                  class="text-left p-4 rounded-xl bg-stone-950 border border-stone-800 hover:border-amber-500/50 transition-all space-y-1 group"
+                >
+                  <div class="flex items-center justify-between text-xs text-stone-400">
+                    <span class="font-semibold uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+                      Messages
+                    </span>
+                    <mat-icon class="text-amber-400" style="font-size: 16px;">headphones</mat-icon>
+                  </div>
+                  <div class="text-xl font-serif font-bold text-amber-400 tabular-nums">
+                    {{ firebaseService.formatHours(firebaseService.totalMessageMinutes()) }} hrs
+                  </div>
+                  <div class="text-[11px] text-stone-400 font-mono tabular-nums">
+                    {{ firebaseService.filteredMessages().length }} msgs · {{ firebaseService.totalMessageRepeats() }}x listened
+                  </div>
+                </button>
+
+                <!-- 3. Seed Altar Total (Always in GHS with Live Conversion) -->
+                <button
+                  type="button"
+                  (click)="setTab('seeds')"
+                  class="text-left p-4 rounded-xl bg-stone-950 border border-stone-800 hover:border-amber-500/50 transition-all space-y-1 group"
+                >
+                  <div class="flex items-center justify-between text-xs text-stone-400">
+                    <span class="font-semibold uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+                      Seeds (GHS)
+                    </span>
+                    <mat-icon class="text-emerald-400" style="font-size: 16px;">volunteer_activism</mat-icon>
+                  </div>
+                  <div class="text-xl font-serif font-bold text-emerald-400 tabular-nums">
+                    GHS {{ firebaseService.formatOneDecimal(seedTotals.totalGiven) }}
+                  </div>
+                  <div class="text-[11px] text-stone-400 font-mono tabular-nums">
+                    Target {{ firebaseService.formatOneDecimal(seedTotals.totalTarget) }} · Left {{ firebaseService.formatOneDecimal(seedTotals.totalRemaining) }}
+                  </div>
+                </button>
+
+                <!-- 4. Testimonies Total -->
+                <button
+                  type="button"
+                  (click)="setTab('testimonies')"
+                  class="text-left p-4 rounded-xl bg-stone-950 border border-stone-800 hover:border-amber-500/50 transition-all space-y-1 group"
+                >
+                  <div class="flex items-center justify-between text-xs text-stone-400">
+                    <span class="font-semibold uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+                      Testimonies
+                    </span>
+                    <mat-icon class="text-amber-400" style="font-size: 16px;">celebration</mat-icon>
+                  </div>
+                  <div class="text-xl font-serif font-bold text-stone-100 tabular-nums">
+                    {{ firebaseService.testimonies().length }}
+                  </div>
+                  <div class="text-[11px] text-stone-400 font-mono tabular-nums">
+                    {{ firebaseService.totalAmensCount() }} Amens
+                  </div>
+                </button>
+
+                <!-- 5. Covenant Petitions Total -->
+                <button
+                  type="button"
+                  (click)="setTab('covenant')"
+                  class="text-left p-4 rounded-xl bg-stone-950 border border-stone-800 hover:border-amber-500/50 transition-all space-y-1 group"
+                >
+                  <div class="flex items-center justify-between text-xs text-stone-400">
+                    <span class="font-semibold uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+                      Covenant
+                    </span>
+                    <mat-icon class="text-amber-400" style="font-size: 16px;">handshake</mat-icon>
+                  </div>
+                  <div class="text-xl font-serif font-bold text-stone-100 tabular-nums">
+                    {{ firebaseService.requests().length }}
+                  </div>
+                  <div class="text-[11px] text-stone-400 font-mono tabular-nums">
+                    {{ firebaseService.activeRequestsCount() }} active · {{ firebaseService.answeredRequestsCount() }} answered
+                  </div>
+                </button>
+              </div>
+
+              <!-- Live FX Breakdown Strip on Dashboard when foreign currencies are present -->
+              @if (seedTotals.hasForeignCurrency) {
+                <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-stone-800/80 text-[11px] text-stone-400 font-mono">
+                  <span class="text-stone-500 font-sans">Seed FX Breakdown:</span>
+                  @for (c of seedTotals.byCurrency; track c.currency) {
+                    <span class="px-2 py-0.5 rounded bg-stone-950 border border-stone-800 text-stone-300 tabular-nums">
+                      {{ c.currency }} {{ firebaseService.formatOneDecimal(c.given) }}/{{ firebaseService.formatOneDecimal(c.target) }}
+                      @if (c.currency !== 'GHS') {
+                        <span class="text-amber-400">
+                          (≈ GHS {{ firebaseService.formatOneDecimal(c.givenGhs) }}/{{ firebaseService.formatOneDecimal(c.targetGhs) }})
+                        </span>
+                      }
+                    </span>
+                  }
+                </div>
+              }
             </div>
 
             <!-- KPI Cards: Daily Target, Weekly Target & Streak -->
@@ -429,7 +675,7 @@
               <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-semibold uppercase tracking-wider text-stone-400">
-                    Daily Prayer Altar
+                    Today
                   </span>
                   <span class="text-xs font-mono text-amber-400">
                     Target: {{ firebaseService.formatMinutes(activeP.dailyTargetMinutes) }}
@@ -441,7 +687,7 @@
                     <div class="text-3xl font-serif font-bold text-stone-100 tabular-nums">
                       {{ firebaseService.formatMinutes(firebaseService.todayMinutes()) }}
                     </div>
-                    <span class="text-xs text-stone-400">Logged Today</span>
+                    <span class="text-xs text-stone-400">Logged</span>
                   </div>
 
                   <div class="text-right">
@@ -452,7 +698,7 @@
                           : 'bg-amber-500/10 text-amber-400'
                       "
                     >
-                      {{ firebaseService.formatPercentage(firebaseService.todayMinutes(), activeP.dailyTargetMinutes) }}% met
+                      {{ firebaseService.formatPercentage(firebaseService.todayMinutes(), activeP.dailyTargetMinutes) }}%
                     </span>
                   </div>
                 </div>
@@ -467,7 +713,7 @@
 
                 <div class="flex items-center justify-between text-xs text-stone-500 pt-1">
                   <span class="tabular-nums">
-                    {{ firebaseService.todayMinutes() >= activeP.dailyTargetMinutes ? 'Daily target completed' : firebaseService.formatOneDecimal(activeP.dailyTargetMinutes - firebaseService.todayMinutes()) + ' mins to go today' }}
+                    {{ firebaseService.todayMinutes() >= activeP.dailyTargetMinutes ? 'Target met' : firebaseService.formatOneDecimal(activeP.dailyTargetMinutes - firebaseService.todayMinutes()) + 'm left' }}
                   </span>
                   <button
                     type="button"
@@ -483,7 +729,7 @@
               <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-semibold uppercase tracking-wider text-stone-400">
-                    Weekly Covenant
+                    This Week
                   </span>
                   <span class="text-xs font-mono text-amber-400">
                     Target: {{ firebaseService.formatMinutes(activeP.weeklyTargetMinutes) }}
@@ -495,7 +741,7 @@
                     <div class="text-3xl font-serif font-bold text-stone-100 tabular-nums">
                       {{ firebaseService.formatMinutes(firebaseService.thisWeekMinutes()) }}
                     </div>
-                    <span class="text-xs text-stone-400">This Week's Total</span>
+                    <span class="text-xs text-stone-400">Logged</span>
                   </div>
 
                   <div class="text-right">
@@ -506,7 +752,7 @@
                           : 'bg-stone-800 text-stone-300'
                       "
                     >
-                      {{ firebaseService.formatPercentage(firebaseService.thisWeekMinutes(), activeP.weeklyTargetMinutes) }}% met
+                      {{ firebaseService.formatPercentage(firebaseService.thisWeekMinutes(), activeP.weeklyTargetMinutes) }}%
                     </span>
                   </div>
                 </div>
@@ -521,7 +767,7 @@
 
                 <div class="flex items-center justify-between text-xs text-stone-500 pt-1">
                   <span class="tabular-nums">
-                    {{ firebaseService.thisWeekMinutes() >= activeP.weeklyTargetMinutes ? 'Weekly covenant achieved!' : firebaseService.formatOneDecimal(activeP.weeklyTargetMinutes - firebaseService.thisWeekMinutes()) + ' mins remaining' }}
+                    {{ firebaseService.thisWeekMinutes() >= activeP.weeklyTargetMinutes ? 'Target met' : firebaseService.formatOneDecimal(activeP.weeklyTargetMinutes - firebaseService.thisWeekMinutes()) + 'm left' }}
                   </span>
                   <button
                     type="button"
@@ -537,9 +783,9 @@
               <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
                 <div class="flex items-center justify-between">
                   <span class="text-xs font-semibold uppercase tracking-wider text-stone-400">
-                    Consistency & Flame
+                    Streak
                   </span>
-                  <span class="text-xs font-mono text-amber-400">Continuous Altar</span>
+                  <span class="text-xs font-mono text-amber-400">Consistency</span>
                 </div>
 
                 <div class="flex items-baseline justify-between">
@@ -548,7 +794,7 @@
                       <span>{{ firebaseService.streakDays() }}</span>
                       <span class="text-base font-sans font-normal text-stone-400">days</span>
                     </div>
-                    <span class="text-xs text-stone-400">Consecutive Prayer Streak</span>
+                    <span class="text-xs text-stone-400">Active Streak</span>
                   </div>
 
                   <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
@@ -559,7 +805,7 @@
                 <!-- Testimonies count and session stats -->
                 <div class="pt-2 border-t border-stone-800 grid grid-cols-2 gap-2 text-xs">
                   <div>
-                    <span class="text-stone-500">Sessions Logged</span>
+                    <span class="text-stone-500">Sessions</span>
                     <div class="text-stone-200 font-semibold font-mono tabular-nums">
                       {{ firebaseService.sessions().length }}
                     </div>
@@ -567,13 +813,9 @@
                   <div>
                     <span class="text-stone-500">Testimonies</span>
                     <div class="text-amber-400 font-semibold font-mono tabular-nums">
-                      {{ firebaseService.testimonies().length }} answered
+                      {{ firebaseService.testimonies().length }}
                     </div>
                   </div>
-                </div>
-
-                <div class="text-[11px] text-stone-500">
-                  "The fire must be kept burning on the altar continuously; it must not go out." - Lev 6:13
                 </div>
               </div>
             </div>
@@ -696,26 +938,36 @@
               </div>
             </div>
 
-            <!-- Partner Accountability Roster (Supports >2 partners) -->
+            <!-- Circle Visibility & Accountability Roster -->
             <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/80 pb-3">
                 <div>
                   <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
-                    Prayer Circle Partners
+                    {{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'Individual Private Space' : 'Shared Partner Circle' }}
                   </span>
                   <h3 class="text-base font-semibold text-stone-100">
-                    Members in Agreement ({{ activeP.memberEmails.length }} Intercessors)
+                    {{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'Private Altar (Only Visible to You)' : 'Members in Agreement (' + activeP.memberEmails.length + ' Partners)' }}
                   </h3>
                 </div>
 
-                <button
-                  type="button"
-                  (click)="showAddPartnerModal.set(true)"
-                  class="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-amber-300 border border-stone-700 transition-colors shrink-0"
-                >
-                  <mat-icon style="font-size: 16px;">person_add</mat-icon>
-                  <span>Invite Another Partner</span>
-                </button>
+                <div class="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    (click)="showCreateCircleModal.set(true)"
+                    class="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-medium text-stone-200 border border-stone-700 transition-colors"
+                  >
+                    <mat-icon style="font-size: 16px;">add_circle_outline</mat-icon>
+                    <span>New Circle</span>
+                  </button>
+                  <button
+                    type="button"
+                    (click)="showAddPartnerModal.set(true)"
+                    class="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-amber-300 border border-stone-700 transition-colors"
+                  >
+                    <mat-icon style="font-size: 16px;">person_add</mat-icon>
+                    <span>{{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'Add Partner to Share' : 'Invite Partner' }}</span>
+                  </button>
+                </div>
               </div>
 
               <!-- Partner Cards Grid -->
@@ -741,8 +993,10 @@
                     </div>
 
                     <div class="flex items-center justify-between pt-2 border-t border-stone-800/60 text-xs">
-                      <span class="text-stone-500">Advancement:</span>
-                      <span class="text-stone-200 font-mono font-medium">Active Partner</span>
+                      <span class="text-stone-500">Access Scope:</span>
+                      <span class="text-stone-200 font-mono font-medium">
+                        {{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'Private Space' : 'Partner Circle' }}
+                      </span>
                     </div>
                   </div>
                 }
@@ -752,10 +1006,17 @@
         </div>
       }
 
-      <!-- TAB 2: PRAYER SANCTUARY & LIVE TIMER -->
-      @if (activeTab() === 'sanctuary') {
-        <app-prayer-sanctuary
-          (openLogModal)="openNewSessionModal($event.minutes)"
+      <!-- TAB 2A: MESSAGE LISTENING TRACKER -->
+      @if (activeTab() === 'messages') {
+        <app-messages-tracker
+          (saved)="showToast($event)"
+        />
+      }
+
+      <!-- TAB 2B: AUTHORITY FIGURE SEED TRACKER -->
+      @if (activeTab() === 'seeds') {
+        <app-seed-tracker
+          (saved)="showToast($event)"
         />
       }
 
@@ -765,13 +1026,13 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-800/80">
             <div>
               <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
-                Accountability Archives
+                Prayer Log
               </span>
               <h1 class="text-2xl sm:text-3xl font-serif font-bold text-stone-100">
-                Daily Prayer Bundles & Journal
+                Journal
               </h1>
               <p class="text-xs text-stone-400 mt-0.5">
-                For each day, record multiple prayer times, document what was prayed about, and allocate answered prayers to testimonies.
+                Daily prayer records and notes.
               </p>
             </div>
 
@@ -789,7 +1050,7 @@
                   "
                 >
                   <mat-icon style="font-size: 16px;">calendar_view_day</mat-icon>
-                  <span>Daily Bundles</span>
+                  <span>By Day</span>
                 </button>
 
                 <button
@@ -803,7 +1064,7 @@
                   "
                 >
                   <mat-icon style="font-size: 16px;">view_timeline</mat-icon>
-                  <span>All Sessions</span>
+                  <span>All</span>
                 </button>
               </div>
 
@@ -813,7 +1074,7 @@
                 class="flex items-center gap-1.5 py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-all shadow-md shrink-0"
               >
                 <mat-icon style="font-size: 18px;">add</mat-icon>
-                <span>Log Prayer Time</span>
+                <span>Log Prayer</span>
               </button>
             </div>
           </div>
@@ -821,26 +1082,26 @@
           <!-- Filters Bar -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
             <div>
-              <label for="jSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search Notes &amp; Topics</label>
+              <label for="jSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
               <input
                 id="jSearch"
                 type="text"
                 [value]="journalSearch()"
                 (input)="journalSearch.set($any($event.target).value)"
-                placeholder="Search notes..."
+                placeholder="Search..."
                 class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
               />
             </div>
 
             <div>
-              <label for="jCat" class="block text-[11px] font-medium text-stone-400 mb-1">Filter by Prayer Stream</label>
+              <label for="jCat" class="block text-[11px] font-medium text-stone-400 mb-1">Category</label>
               <select
                 id="jCat"
                 [value]="journalCategory()"
                 (change)="journalCategory.set($any($event.target).value)"
                 class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
               >
-                <option value="all">All Prayer Streams</option>
+                <option value="all">All Categories</option>
                 @for (c of categories; track c.name) {
                   <option [value]="c.name">{{ c.name }}</option>
                 }
@@ -848,14 +1109,14 @@
             </div>
 
             <div>
-              <label for="jMember" class="block text-[11px] font-medium text-stone-400 mb-1">Filter by Intercessor</label>
+              <label for="jMember" class="block text-[11px] font-medium text-stone-400 mb-1">Member</label>
               <select
                 id="jMember"
                 [value]="journalMember()"
                 (change)="journalMember.set($any($event.target).value)"
                 class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
               >
-                <option value="all">All Circle Partners</option>
+                <option value="all">All Members</option>
                 @for (email of firebaseService.activePartnership()?.memberEmails || []; track email) {
                   <option [value]="email.split('@')[0]">{{ email.split('@')[0] }}</option>
                 }
@@ -866,18 +1127,18 @@
           <!-- VIEW MODE 1: DAILY PRAYER BUNDLES (Grouped by day) -->
           @if (journalViewMode() === 'bundles') {
             @if (displayedDailyBundles().length === 0) {
-              <div class="text-center py-16 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-3">
+              <div class="text-center py-12 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-3">
                 <mat-icon class="text-stone-600" style="font-size: 40px;">calendar_view_day</mat-icon>
-                <h3 class="text-base font-semibold text-stone-300">No prayer days recorded yet</h3>
+                <h3 class="text-base font-semibold text-stone-300">No prayer logs yet</h3>
                 <p class="text-xs text-stone-500 max-w-sm mx-auto">
-                  Begin your prayer bundle for today or log past days. Each day bundles all your prayer times and testimony breakthroughs.
+                  Record your first prayer session to begin.
                 </p>
                 <button
                   type="button"
                   (click)="openNewSessionModal()"
                   class="py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
                 >
-                  Start Today's Prayer Bundle
+                  Log Prayer
                 </button>
               </div>
             } @else {
@@ -899,7 +1160,7 @@
                           </div>
                           <div class="flex items-center gap-2 text-xs mt-0.5">
                             <span class="text-stone-400">
-                              {{ bundle.sessions.length }} prayer {{ bundle.sessions.length === 1 ? 'time' : 'times' }} recorded
+                              {{ bundle.sessions.length }} {{ bundle.sessions.length === 1 ? 'session' : 'sessions' }}
                             </span>
                             @if (bundle.testimoniesCount > 0) {
                               <span class="text-amber-400 font-medium flex items-center gap-0.5">
@@ -912,7 +1173,6 @@
                       </div>
 
                       <div class="flex items-center gap-2.5">
-                        <!-- Daily Total & Target Status Badge -->
                         <div
                           class="px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5"
                           [class]="
@@ -926,19 +1186,17 @@
                           </mat-icon>
                           <span class="font-mono">{{ firebaseService.formatMinutes(bundle.totalMinutes) }}</span>
                           <span class="text-[11px] opacity-80">
-                            / {{ bundle.dailyTargetMinutes }}m {{ bundle.metDailyTarget ? 'Target Met!' : 'Target' }}
+                            / {{ bundle.dailyTargetMinutes }}m
                           </span>
                         </div>
 
-                        <!-- Quick add prayer time to this specific day bundle -->
                         <button
                           type="button"
                           (click)="openNewSessionForDate(bundle.date)"
                           class="py-1.5 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium border border-stone-700/80 transition-colors flex items-center gap-1"
-                          title="Add another prayer encounter to this day"
                         >
                           <mat-icon style="font-size: 16px;">add</mat-icon>
-                          <span>Add Prayer Time</span>
+                          <span>Add Time</span>
                         </button>
                       </div>
                     </div>
@@ -947,42 +1205,38 @@
                     <div class="p-5 sm:p-6 space-y-4">
                       @for (s of bundle.sessions; track s.id; let idx = $index) {
                         <div class="p-4 rounded-xl bg-stone-950/60 border border-stone-800/80 space-y-3 hover:border-stone-700 transition-all">
-                          <!-- Encounter Row Header -->
                           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/60 pb-2.5">
                             <div class="flex flex-wrap items-center gap-2 text-xs">
                               <span class="font-mono font-bold text-amber-400 text-sm">
                                 {{ firebaseService.formatMinutes(s.durationMinutes) }}
                               </span>
                               @if (s.startTime) {
-                                <span class="text-stone-400">· at {{ s.startTime }}</span>
+                                <span class="text-stone-400">· {{ s.startTime }}</span>
                               } @else {
-                                <span class="text-stone-500">· Watch #{{ idx + 1 }}</span>
+                                <span class="text-stone-500">· #{{ idx + 1 }}</span>
                               }
                               <span class="text-stone-500">·</span>
-                              <span class="text-stone-300 font-medium">By {{ s.authorName }}</span>
+                              <span class="text-stone-300 font-medium">{{ s.authorName }}</span>
                               @if (s.wasTogether) {
                                 <span class="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                                  In Agreement
+                                  Partner
                                 </span>
                               }
                             </div>
 
-                            <!-- Multiple Category Badges -->
                             <div class="flex flex-wrap items-center gap-1.5">
                               @for (catName of (s.categories && s.categories.length > 0 ? s.categories : [s.category]); track catName) {
                                 <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-800 border border-stone-700/60 text-[11px] text-stone-300">
-                                  <mat-icon style="font-size: 12px; width: 12px; height: 12px;" class="text-amber-400">fiber_manual_record</mat-icon>
                                   <span>{{ catName }}</span>
                                 </span>
                               }
 
-                              <!-- Edit & Delete buttons -->
                               <div class="flex items-center gap-1 ml-1 pl-1 border-l border-stone-800">
                                 <button
                                   type="button"
                                   (click)="openEditSessionModal(s)"
                                   class="p-1 rounded text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition-colors"
-                                  title="Edit Prayer Record"
+                                  title="Edit"
                                 >
                                   <mat-icon style="font-size: 16px;">edit</mat-icon>
                                 </button>
@@ -990,7 +1244,7 @@
                                   type="button"
                                   (click)="confirmDelete('session', s.id)"
                                   class="p-1 rounded text-stone-400 hover:text-red-400 hover:bg-stone-800 transition-colors"
-                                  title="Delete Record"
+                                  title="Delete"
                                 >
                                   <mat-icon style="font-size: 16px;">delete</mat-icon>
                                 </button>
@@ -998,7 +1252,6 @@
                             </div>
                           </div>
 
-                          <!-- Scripture & Topics -->
                           @if (s.scripture || (s.topics && s.topics.length > 0)) {
                             <div class="flex flex-wrap items-center gap-2 text-xs">
                               @if (s.scripture) {
@@ -1015,54 +1268,46 @@
                             </div>
                           }
 
-                          <!-- What was prayed about -->
-                          <div class="space-y-1">
-                            <span class="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block">
-                              What was prayed about:
-                            </span>
+                          @if (s.notes) {
                             <p class="text-xs sm:text-sm text-stone-200 leading-relaxed whitespace-pre-line">
                               {{ s.notes }}
                             </p>
-                          </div>
+                          }
 
-                          <!-- Testimony Allocation / Link Indicator -->
                           <div class="pt-2 border-t border-stone-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             @if (s.linkedTestimonyId) {
-                              <div class="flex items-center gap-2 text-xs text-amber-300 font-medium">
-                                <mat-icon style="font-size: 18px;" class="text-amber-400">celebration</mat-icon>
-                                <span>Answered Testimony Allocated: <strong>{{ s.linkedTestimonyTitle || 'Testimony on Altar' }}</strong></span>
+                              <div class="flex items-center gap-1.5 text-xs text-amber-300 font-medium">
+                                <mat-icon style="font-size: 16px;" class="text-amber-400">celebration</mat-icon>
+                                <span>Testimony: <strong>{{ s.linkedTestimonyTitle || 'Recorded' }}</strong></span>
                               </div>
                               <button
                                 type="button"
                                 (click)="setTab('testimonies')"
                                 class="text-xs text-stone-400 hover:text-stone-100 flex items-center gap-1"
                               >
-                                <span>View on Praise Altar</span>
+                                <span>View</span>
                                 <mat-icon style="font-size: 14px;">arrow_forward</mat-icon>
                               </button>
                             } @else {
-                              <span class="text-[11px] text-stone-500">
-                                Stood in agreement before the Throne
-                              </span>
+                              <span></span>
                               <button
                                 type="button"
                                 (click)="allocateTestimonyForSession(s)"
                                 class="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all"
                               >
                                 <mat-icon style="font-size: 15px;">celebration</mat-icon>
-                                <span>Allocate to Testimony / Mark Answered</span>
+                                <span>Mark Answered</span>
                               </button>
                             }
                           </div>
                         </div>
                       }
 
-                      <!-- Testimonies born from this day -->
                       @if (bundle.testimonies.length > 0) {
                         <div class="mt-4 pt-4 border-t border-stone-800/80 space-y-2">
                           <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                             <mat-icon style="font-size: 16px;">auto_awesome</mat-icon>
-                            <span>Testimonies & Answers on this Day ({{ bundle.testimonies.length }})</span>
+                            <span>Testimonies ({{ bundle.testimonies.length }})</span>
                           </span>
 
                           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1083,7 +1328,7 @@
                                   {{ t.answeredDetail }}
                                 </p>
                                 <div class="flex items-center justify-between text-[11px] text-stone-500 pt-1">
-                                  <span>By {{ t.authorName }}</span>
+                                  <span>{{ t.authorName }}</span>
                                   <span class="text-amber-400 font-semibold">Amen ({{ t.amensCount }})</span>
                                 </div>
                               </div>
@@ -1098,21 +1343,18 @@
             }
           }
 
-          <!-- VIEW MODE 2: TIMELINE STREAM (Individual sessions feed) -->
+          <!-- VIEW MODE 2: TIMELINE STREAM -->
           @if (journalViewMode() === 'stream') {
             @if (displayedJournalSessions().length === 0) {
-              <div class="text-center py-16 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-3">
-                <mat-icon class="text-stone-600" style="font-size: 40px;">menu_book</mat-icon>
-                <h3 class="text-base font-semibold text-stone-300">No prayer sessions match your filter</h3>
-                <p class="text-xs text-stone-500 max-w-sm mx-auto">
-                  Try adjusting your category or member filter to see recorded prayer encounters.
-                </p>
+              <div class="text-center py-12 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-2">
+                <mat-icon class="text-stone-600" style="font-size: 36px;">menu_book</mat-icon>
+                <h3 class="text-sm font-semibold text-stone-300">No matching sessions</h3>
               </div>
             } @else {
               <div class="space-y-4">
                 @for (s of displayedJournalSessions(); track s.id) {
-                  <div class="rounded-2xl bg-stone-900 border border-stone-800/80 p-5 sm:p-6 space-y-4 hover:border-stone-700 transition-all">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/60 pb-3">
+                  <div class="rounded-2xl bg-stone-900 border border-stone-800/80 p-5 space-y-3 hover:border-stone-700 transition-all">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/60 pb-2.5">
                       <div class="flex flex-wrap items-center gap-2 text-xs text-stone-400">
                         <span class="text-base font-serif font-bold text-amber-400 font-mono tabular-nums">
                           {{ firebaseService.formatMinutes(s.durationMinutes) }}
@@ -1120,15 +1362,13 @@
                         <span aria-hidden="true">·</span>
                         <span class="font-medium text-stone-200">{{ s.date }}</span>
                         @if (s.startTime) {
-                          <span class="text-stone-500">at {{ s.startTime }}</span>
+                          <span class="text-stone-500">{{ s.startTime }}</span>
                         }
                         <span aria-hidden="true">·</span>
-                        <span class="font-medium text-amber-300">
-                          By {{ s.authorName }}
-                        </span>
+                        <span class="font-medium text-amber-300">{{ s.authorName }}</span>
                         @if (s.wasTogether) {
                           <span class="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                            Joint Agreement
+                            Partner
                           </span>
                         }
                       </div>
@@ -1144,7 +1384,7 @@
                           type="button"
                           (click)="openEditSessionModal(s)"
                           class="p-1 rounded text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition-colors ml-1"
-                          title="Edit Session"
+                          title="Edit"
                         >
                           <mat-icon style="font-size: 16px;">edit</mat-icon>
                         </button>
@@ -1153,43 +1393,24 @@
                           type="button"
                           (click)="confirmDelete('session', s.id)"
                           class="p-1 rounded text-stone-400 hover:text-red-400 hover:bg-stone-800 transition-colors"
-                          title="Delete Session"
+                          title="Delete"
                         >
                           <mat-icon style="font-size: 16px;">delete</mat-icon>
                         </button>
                       </div>
                     </div>
 
-                    @if (s.topics.length > 0 || s.scripture) {
-                      <div class="flex flex-wrap items-center gap-2 text-xs">
-                        @if (s.scripture) {
-                          <div class="flex items-center gap-1 bg-stone-950 text-amber-400 border border-stone-800 px-2.5 py-1 rounded-lg font-mono">
-                            <mat-icon style="font-size: 14px;">auto_stories</mat-icon>
-                            <span>{{ s.scripture }}</span>
-                          </div>
-                        }
-                        @for (topic of s.topics; track topic) {
-                          <span class="text-stone-400 bg-stone-950 px-2.5 py-1 rounded-lg border border-stone-800 text-[11px]">
-                            {{ topic }}
-                          </span>
-                        }
-                      </div>
-                    }
-
-                    <div class="space-y-1">
-                      <span class="text-[11px] font-semibold text-stone-500 uppercase tracking-wider block">
-                        What Was Prayed About:
-                      </span>
+                    @if (s.notes) {
                       <p class="text-xs sm:text-sm text-stone-200 leading-relaxed whitespace-pre-line">
                         {{ s.notes }}
                       </p>
-                    </div>
+                    }
 
                     <div class="flex items-center justify-between pt-2 border-t border-stone-800/40">
                       @if (s.linkedTestimonyId) {
                         <span class="text-xs text-amber-400 font-semibold flex items-center gap-1">
                           <mat-icon style="font-size: 16px;">celebration</mat-icon>
-                          <span>Answered: {{ s.linkedTestimonyTitle || 'Testimony on Altar' }}</span>
+                          <span>Answered: {{ s.linkedTestimonyTitle || 'Testimony' }}</span>
                         </span>
                       } @else {
                         <span></span>
@@ -1199,7 +1420,7 @@
                           class="text-xs text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1"
                         >
                           <mat-icon style="font-size: 16px;">celebration</mat-icon>
-                          <span>Allocate to Testimony / Record Answer</span>
+                          <span>Mark Answered</span>
                         </button>
                       }
                     </div>
@@ -1217,13 +1438,13 @@
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-800/80">
             <div>
               <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
-                Memorial of Faithfulness
+                Praise Wall
               </span>
               <h1 class="text-2xl sm:text-3xl font-serif font-bold text-stone-100">
-                Testimonies & Answered Prayers
+                Testimonies
               </h1>
               <p class="text-xs text-stone-400 mt-0.5">
-                "Bless the Lord, O my soul, and forget not all His benefits." Permanent record of God's deeds for your circle.
+                Answered prayers and breakthroughs.
               </p>
             </div>
 
@@ -1233,26 +1454,26 @@
               class="flex items-center gap-1.5 py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-all shadow-md shrink-0"
             >
               <mat-icon style="font-size: 18px;">add</mat-icon>
-              <span>Record Testimony</span>
+              <span>Add Testimony</span>
             </button>
           </div>
 
           <!-- Search & Filter -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
             <div>
-              <label for="tSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search Testimonies</label>
+              <label for="tSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
               <input
                 id="tSearch"
                 type="text"
                 [value]="testimonySearch()"
                 (input)="testimonySearch.set($any($event.target).value)"
-                placeholder="Search testimonies..."
+                placeholder="Search..."
                 class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
               />
             </div>
 
             <div>
-              <label for="tFilterCat" class="block text-[11px] font-medium text-stone-400 mb-1">Filter Category</label>
+              <label for="tFilterCat" class="block text-[11px] font-medium text-stone-400 mb-1">Category</label>
               <select
                 id="tFilterCat"
                 [value]="testimonyCategory()"
@@ -1269,47 +1490,41 @@
 
           <!-- Testimonies Wall Grid -->
           @if (displayedTestimonies().length === 0) {
-            <div class="text-center py-16 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-3">
+            <div class="text-center py-12 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-3">
               <mat-icon class="text-stone-600" style="font-size: 40px;">celebration</mat-icon>
-              <h3 class="text-base font-semibold text-stone-300">No testimonies on the altar yet</h3>
+              <h3 class="text-base font-semibold text-stone-300">No testimonies yet</h3>
               <p class="text-xs text-stone-500 max-w-sm mx-auto">
-                Has God answered a prayer for you or your circle? Document it here to praise Him and build lasting faith.
+                Record your first answered prayer.
               </p>
               <button
                 type="button"
                 (click)="openNewTestimonyModal()"
                 class="py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
               >
-                Record First Testimony
+                Add Testimony
               </button>
             </div>
           } @else {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               @for (t of displayedTestimonies(); track t.id) {
                 <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4 hover:border-amber-500/30 transition-all flex flex-col justify-between">
-                  <div class="space-y-4">
+                  <div class="space-y-3">
                     <div class="flex items-start justify-between gap-3 border-b border-stone-800/80 pb-3">
                       <div>
-                        <div class="flex flex-wrap items-center gap-1.5 mb-1.5">
+                        <div class="flex flex-wrap items-center gap-1.5 mb-1">
                           @for (catName of (t.categories && t.categories.length > 0 ? t.categories : [t.category]); track catName) {
                             <span class="text-[10px] font-semibold uppercase tracking-wider text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
                               {{ catName }}
                             </span>
                           }
-                          @if (t.linkedSessionId) {
-                            <span class="text-[10px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 flex items-center gap-1">
-                              <mat-icon style="font-size: 12px; width: 12px; height: 12px;">link</mat-icon>
-                              <span>Allocated from Prayer Encounter</span>
-                            </span>
-                          }
                         </div>
-                        <h2 class="text-lg font-serif font-bold text-stone-100 mt-0.5">
+                        <h2 class="text-lg font-serif font-bold text-stone-100">
                           {{ t.title }}
                         </h2>
-                        <div class="flex items-center gap-2 text-xs text-stone-400 mt-1">
-                          <span>Answered: {{ t.date }}</span>
+                        <div class="flex items-center gap-2 text-xs text-stone-400 mt-0.5">
+                          <span>{{ t.date }}</span>
                           <span aria-hidden="true">·</span>
-                          <span class="font-medium text-stone-300">By {{ t.authorName }}</span>
+                          <span class="font-medium text-stone-300">{{ t.authorName }}</span>
                         </div>
                       </div>
 
@@ -1318,7 +1533,7 @@
                           type="button"
                           (click)="openEditTestimonyModal(t)"
                           class="p-1 rounded text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition-colors"
-                          title="Edit Testimony"
+                          title="Edit"
                         >
                           <mat-icon style="font-size: 16px;">edit</mat-icon>
                         </button>
@@ -1326,61 +1541,53 @@
                           type="button"
                           (click)="confirmDelete('testimony', t.id)"
                           class="p-1 rounded text-stone-400 hover:text-red-400 hover:bg-stone-800 transition-colors"
-                          title="Delete Testimony"
+                          title="Delete"
                         >
                           <mat-icon style="font-size: 16px;">delete</mat-icon>
                         </button>
                       </div>
                     </div>
 
-                    <div class="p-3 rounded-xl bg-stone-950/70 border border-stone-800/60 space-y-1">
-                      <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
-                        The Prayer Burden:
-                      </span>
-                      <p class="text-xs text-stone-300 leading-relaxed italic">
-                        "{{ t.prayerBurden }}"
-                      </p>
-                    </div>
+                    @if (t.prayerBurden) {
+                      <div class="p-3 rounded-xl bg-stone-950/70 border border-stone-800/60 space-y-0.5">
+                        <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                          Request
+                        </span>
+                        <p class="text-xs text-stone-300 leading-relaxed">
+                          {{ t.prayerBurden }}
+                        </p>
+                      </div>
+                    }
 
-                    <div class="space-y-1">
+                    <div class="space-y-0.5">
                       <span class="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
-                        How God Answered:
+                        Answer
                       </span>
                       <p class="text-xs sm:text-sm text-stone-100 leading-relaxed whitespace-pre-line">
                         {{ t.answeredDetail }}
                       </p>
                     </div>
-
-                    @if (t.scripturePraise) {
-                      <div class="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 italic font-serif">
-                        {{ t.scripturePraise }}
-                      </div>
-                    }
                   </div>
 
                   <!-- Footer: Amen Counter & Actions -->
                   <div class="flex items-center justify-between pt-3 border-t border-stone-800/80">
-                    <div class="flex items-center gap-2">
-                      <button
-                        type="button"
-                        (click)="celebrateAmen(t.id)"
-                        class="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-all active:scale-95"
-                      >
-                        <mat-icon style="font-size: 16px;">celebration</mat-icon>
-                        <span>Amen! ({{ t.amensCount }})</span>
-                      </button>
+                    <button
+                      type="button"
+                      (click)="celebrateAmen(t.id)"
+                      class="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-all active:scale-95"
+                    >
+                      <mat-icon style="font-size: 16px;">celebration</mat-icon>
+                      <span>Amen ({{ t.amensCount }})</span>
+                    </button>
 
-                      <button
-                        type="button"
-                        (click)="openEditTestimonyModal(t)"
-                        class="flex items-center gap-1 py-1.5 px-2.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs transition-colors"
-                      >
-                        <mat-icon style="font-size: 14px;">edit</mat-icon>
-                        <span>Edit</span>
-                      </button>
-                    </div>
-
-                    <span class="text-[11px] text-stone-500">Living Memorial</span>
+                    <button
+                      type="button"
+                      (click)="openEditTestimonyModal(t)"
+                      class="flex items-center gap-1 py-1.5 px-2.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs transition-colors"
+                    >
+                      <mat-icon style="font-size: 14px;">edit</mat-icon>
+                      <span>Edit</span>
+                    </button>
                   </div>
                 </div>
               }
@@ -1391,17 +1598,17 @@
 
       <!-- TAB 5: COVENANT, TARGETS & REQUESTS -->
       @if (activeTab() === 'covenant') {
-        <div class="space-y-8">
+        <div class="space-y-6">
           @if (firebaseService.activePartnership(); as activeP) {
             <div class="pb-4 border-b border-stone-800/80">
               <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
-                Circle Covenant & Intercession Ledger
+                Covenant
               </span>
               <h1 class="text-2xl sm:text-3xl font-serif font-bold text-stone-100">
                 {{ activeP.name }}
               </h1>
               <p class="text-xs text-stone-400 mt-0.5">
-                Manage your targets, invite prayer partners, and maintain your shared intercession watch list.
+                Targets, members, and prayer requests.
               </p>
             </div>
 
@@ -1412,31 +1619,31 @@
                 <div class="flex items-center justify-between">
                   <div>
                     <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
-                      Accountability Targets
+                      Targets
                     </span>
-                    <h3 class="text-base font-semibold text-stone-100">Covenant Goals</h3>
+                    <h3 class="text-base font-semibold text-stone-100">Prayer Goals</h3>
                   </div>
                   <button
                     type="button"
                     (click)="showTargetModal.set(true)"
                     class="py-1 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-medium text-amber-300 border border-stone-700 transition-colors"
                   >
-                    Adjust Targets
+                    Edit
                   </button>
                 </div>
 
-                <div class="space-y-3 pt-2 text-xs">
+                <div class="space-y-2.5 pt-1 text-xs">
                   <div class="flex items-center justify-between p-3 rounded-xl bg-stone-950 border border-stone-800">
-                    <span class="text-stone-400">Daily Prayer Target</span>
+                    <span class="text-stone-400">Daily Target</span>
                     <span class="font-mono font-bold text-stone-100">
-                      {{ firebaseService.formatMinutes(activeP.dailyTargetMinutes) }} / day
+                      {{ firebaseService.formatMinutes(activeP.dailyTargetMinutes) }}
                     </span>
                   </div>
 
                   <div class="flex items-center justify-between p-3 rounded-xl bg-stone-950 border border-stone-800">
-                    <span class="text-stone-400">Weekly Prayer Target</span>
+                    <span class="text-stone-400">Weekly Target</span>
                     <span class="font-mono font-bold text-stone-100">
-                      {{ firebaseService.formatMinutes(activeP.weeklyTargetMinutes) }} / week
+                      {{ firebaseService.formatMinutes(activeP.weeklyTargetMinutes) }}
                     </span>
                   </div>
 
@@ -1444,11 +1651,11 @@
                     <div>
                       <span class="text-stone-400 block">{{ activeP.periodTitle }}</span>
                       <span class="text-[10px] text-stone-500">
-                        {{ activeP.periodStartDate }} to {{ activeP.periodEndDate }}
+                        {{ activeP.periodStartDate }} — {{ activeP.periodEndDate }}
                       </span>
                     </div>
                     <span class="font-mono font-bold text-amber-400 text-sm tabular-nums">
-                      {{ firebaseService.formatHours(activeP.periodTargetMinutes) }} Hours Target
+                      {{ firebaseService.formatHours(activeP.periodTargetMinutes) }}h
                     </span>
                   </div>
                 </div>
@@ -1459,24 +1666,24 @@
                 <div class="flex items-center justify-between">
                   <div>
                     <span class="text-xs font-semibold uppercase tracking-wider text-emerald-500">
-                      Partnership Members
+                      Members
                     </span>
-                    <h3 class="text-base font-semibold text-stone-100">Active Intercessors</h3>
+                    <h3 class="text-base font-semibold text-stone-100">Circle Roster</h3>
                   </div>
                   <button
                     type="button"
                     (click)="showAddPartnerModal.set(true)"
                     class="py-1 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-medium text-emerald-300 border border-stone-700 transition-colors"
                   >
-                    + Add Partner Email
+                    + Add Partner
                   </button>
                 </div>
 
-                <div class="space-y-2.5 pt-1 text-xs">
+                <div class="space-y-2 pt-1 text-xs">
                   @for (email of activeP.memberEmails; track email) {
                     <div class="p-3 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between">
                       <div class="flex items-center gap-2">
-                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                         <span class="font-semibold text-stone-200">{{ email }}</span>
                       </div>
                       @if (email.toLowerCase() === (firebaseService.currentUser()?.email || '').toLowerCase()) {
@@ -1486,9 +1693,6 @@
                       }
                     </div>
                   }
-                  <p class="text-[11px] text-stone-500 italic pt-1">
-                    Any partner added can sign in with their Google account to log prayer sessions and track progress together.
-                  </p>
                 </div>
               </div>
             </div>
@@ -1498,14 +1702,11 @@
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
-                    Intercession Watch List
+                    Petitions
                   </span>
                   <h3 class="text-base font-semibold text-stone-100">
-                    Active Prayer Petitions
+                    Prayer Requests
                   </h3>
-                  <p class="text-xs text-stone-400">
-                    Keep persistent watch over prayer requests until the testimony is manifest.
-                  </p>
                 </div>
 
                 <button
@@ -1521,8 +1722,8 @@
               <!-- Request items -->
               <div class="space-y-3 pt-2">
                 @if (firebaseService.requests().length === 0) {
-                  <div class="text-center py-8 text-xs text-stone-500">
-                    No active petitions on the watch list. Add a burden for you and your circle to pray over.
+                  <div class="text-center py-6 text-xs text-stone-500">
+                    No prayer requests yet.
                   </div>
                 } @else {
                   @for (req of firebaseService.requests(); track req.id) {
@@ -1539,18 +1740,18 @@
                                 : (req.status === 'waiting' ? 'bg-amber-500/20 text-amber-300' : 'bg-blue-500/20 text-blue-300')
                             "
                           >
-                            {{ req.status === 'answered' ? 'Answered' : (req.status === 'waiting' ? 'Waiting' : 'Actively Praying') }}
+                            {{ req.status === 'answered' ? 'Answered' : (req.status === 'waiting' ? 'Waiting' : 'Active') }}
                           </button>
                           <h4 class="text-sm font-semibold text-stone-100">{{ req.title }}</h4>
                         </div>
 
                         <div class="flex items-center gap-2 text-xs text-stone-500">
-                          <span>Added {{ req.dateAdded }}</span>
+                          <span>{{ req.dateAdded }}</span>
                           <button
                             type="button"
                             (click)="editRequest(req)"
                             class="p-1 hover:text-stone-300"
-                            title="Edit Request"
+                            title="Edit"
                           >
                             <mat-icon style="font-size: 15px;">edit</mat-icon>
                           </button>
@@ -1558,7 +1759,7 @@
                             type="button"
                             (click)="confirmDelete('request', req.id)"
                             class="p-1 hover:text-red-400"
-                            title="Delete Request"
+                            title="Delete"
                           >
                             <mat-icon style="font-size: 15px;">delete</mat-icon>
                           </button>
@@ -1577,7 +1778,7 @@
                             class="text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1"
                           >
                             <mat-icon style="font-size: 16px;">celebration</mat-icon>
-                            <span>Mark as Answered & Turn into Testimony</span>
+                            <span>Mark Answered</span>
                           </button>
                         </div>
                       }
@@ -1599,7 +1800,7 @@
       [initialDate]="initialLogDate()"
       [sessionToEdit]="sessionToEdit()"
       (dismiss)="showLogModal.set(false)"
-      (saved)="showToast(sessionToEdit() ? 'Prayer encounter updated!' : 'Prayer session saved to circle!')"
+      (saved)="showToast(sessionToEdit() ? 'Session updated.' : 'Session saved.')"
     />
   }
 
@@ -1610,7 +1811,7 @@
       [linkedSessionId]="allocatingSessionId()"
       [testimonyToEdit]="testimonyToEdit()"
       (dismiss)="showTestimonyModal.set(false)"
-      (saved)="showToast(testimonyToEdit() ? 'Testimony record updated!' : 'Testimony added to praise altar!')"
+      (saved)="showToast(testimonyToEdit() ? 'Testimony updated.' : 'Testimony saved.')"
     />
   }
 
@@ -1630,14 +1831,14 @@
   @if (showCreateCircleModal()) {
     <app-create-circle-modal
       (dismiss)="showCreateCircleModal.set(false)"
-      (created)="showToast('Prayer circle established! Welcome.')"
+      (created)="showToast('Circle created.')"
     />
   }
 
   @if (showAddPartnerModal()) {
     <app-add-partner-modal
       (dismiss)="showAddPartnerModal.set(false)"
-      (added)="showToast('Prayer partner invited!')"
+      (added)="showToast('Partner added.')"
     />
   }
 
@@ -1656,9 +1857,9 @@
       aria-modal="true"
     >
       <div class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
-        <h3 class="text-base font-serif font-bold text-stone-100">Confirm Removal</h3>
-        <p class="text-xs text-stone-400 leading-relaxed">
-          Are you sure you want to remove this item? This action will remove it from your circle record in Firestore.
+        <h3 class="text-base font-serif font-bold text-stone-100">Delete Record</h3>
+        <p class="text-xs text-stone-400">
+          Delete this record permanently?
         </p>
         <div class="flex items-center justify-end gap-3 pt-2">
           <button

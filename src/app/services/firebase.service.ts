@@ -25,13 +25,16 @@ import {
 import firebaseConfig from '../../../firebase-applet-config.json';
 import {
   AppUser,
+  AuthorityFigureSeed,
   CategoryMetric,
   DailyChartBar,
   DailyPrayerBundle,
+  MessageListeningRecord,
   Partnership,
   PRAYER_CATEGORIES,
   PrayerRequest,
   PrayerSession,
+  SeedGivingRecord,
   Testimony,
   WeeklyTrendBar,
 } from '../models/prayer.model';
@@ -77,6 +80,9 @@ interface LocalCloudBackup {
   sessions: Record<string, PrayerSession[]>;
   testimonies: Record<string, Testimony[]>;
   requests: Record<string, PrayerRequest[]>;
+  messages: Record<string, MessageListeningRecord[]>;
+  authorities: Record<string, AuthorityFigureSeed[]>;
+  seeds: Record<string, SeedGivingRecord[]>;
 }
 
 // Initialize Firebase
@@ -148,19 +154,95 @@ export class FirebaseService {
   readonly sessions = signal<PrayerSession[]>([]);
   readonly testimonies = signal<Testimony[]>([]);
   readonly requests = signal<PrayerRequest[]>([]);
+  readonly messages = signal<MessageListeningRecord[]>([]);
+  readonly authorities = signal<AuthorityFigureSeed[]>([]);
+  readonly seeds = signal<SeedGivingRecord[]>([]);
 
   // Filter state (e.g. view all in circle or specific partner)
   readonly activeFilterMember = signal<string>('all');
+
+  // Live FX conversion to GHS (Dashboard & Seed main currency)
+  readonly fxToGhs = signal<Record<string, number>>({
+    GHS: 1,
+    USD: 15.8,
+    GBP: 20.1,
+    EUR: 17.1,
+    NGN: 0.01,
+  });
+  readonly fxSource = signal<'live' | 'fallback'>('fallback');
+  readonly fxUpdatedAt = signal<string>('');
 
   private unsubPartnerships: (() => void) | null = null;
   private unsubSessions: (() => void) | null = null;
   private unsubTestimonies: (() => void) | null = null;
   private unsubRequests: (() => void) | null = null;
+  private unsubMessages: (() => void) | null = null;
+  private unsubAuthorities: (() => void) | null = null;
+  private unsubSeeds: (() => void) | null = null;
   private fallbackPollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     this.testConnection();
     this.initAuthListener();
+    this.refreshLiveExchangeRates();
+  }
+
+  async refreshLiveExchangeRates(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      const res = await fetch('/api/fx-rates');
+      if (res.ok) {
+        const data = (await res.json()) as {
+          toGhs?: Record<string, number>;
+          source?: 'live' | 'fallback';
+          updatedAt?: string;
+        };
+        if (data.toGhs) {
+          this.fxToGhs.set({ ...this.fxToGhs(), ...data.toGhs, GHS: 1 });
+          this.fxSource.set(data.source || 'live');
+          this.fxUpdatedAt.set(data.updatedAt || new Date().toISOString());
+          return;
+        }
+      }
+    } catch {
+      // Try direct public API if /api/fx-rates is unavailable
+    }
+
+    try {
+      const directRes = await fetch('https://open.er-api.com/v6/latest/GHS');
+      if (directRes.ok) {
+        const data = (await directRes.json()) as {
+          rates?: Record<string, number>;
+          time_last_update_utc?: string;
+        };
+        if (data.rates) {
+          const map: Record<string, number> = { ...this.fxToGhs(), GHS: 1 };
+          for (const [code, rate] of Object.entries(data.rates)) {
+            if (typeof rate === 'number' && rate > 0) {
+              map[code] = Number((1 / rate).toFixed(4));
+            }
+          }
+          this.fxToGhs.set(map);
+          this.fxSource.set('live');
+          this.fxUpdatedAt.set(data.time_last_update_utc || new Date().toISOString());
+        }
+      }
+    } catch {
+      // Keep default fallback rates
+    }
+  }
+
+  getRateToGhs(currency: string): number {
+    const code = (currency || 'GHS').toUpperCase().trim();
+    if (code === 'GHS') return 1;
+    const rates = this.fxToGhs();
+    return rates[code] || 1;
+  }
+
+  convertToGhs(amount: number, currency: string): number {
+    const num = Number(amount) || 0;
+    const rate = this.getRateToGhs(currency);
+    return num * rate;
   }
 
   getCurrentDomain(): string {
@@ -360,15 +442,26 @@ export class FirebaseService {
 
   private getLocalBackup(): LocalCloudBackup {
     if (typeof window === 'undefined') {
-      return { partnerships: [], sessions: {}, testimonies: {}, requests: {} };
+      return { partnerships: [], sessions: {}, testimonies: {}, requests: {}, messages: {}, authorities: {}, seeds: {} };
     }
     try {
       const raw = localStorage.getItem(LOCAL_STORE_KEY);
-      if (raw) return JSON.parse(raw) as LocalCloudBackup;
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<LocalCloudBackup>;
+        return {
+          partnerships: parsed.partnerships || [],
+          sessions: parsed.sessions || {},
+          testimonies: parsed.testimonies || {},
+          requests: parsed.requests || {},
+          messages: parsed.messages || {},
+          authorities: parsed.authorities || {},
+          seeds: parsed.seeds || {},
+        };
+      }
     } catch {
       // ignore
     }
-    return { partnerships: [], sessions: {}, testimonies: {}, requests: {} };
+    return { partnerships: [], sessions: {}, testimonies: {}, requests: {}, messages: {}, authorities: {}, seeds: {} };
   }
 
   private saveLocalBackup(data: LocalCloudBackup) {
@@ -410,14 +503,19 @@ export class FirebaseService {
           sessions?: PrayerSession[];
           testimonies?: Testimony[];
           requests?: PrayerRequest[];
+          messages?: MessageListeningRecord[];
+          authorities?: AuthorityFigureSeed[];
+          seeds?: SeedGivingRecord[];
         };
 
-        // Merge server partnerships with local backup partnerships
+        // Merge server partnerships with local backup partnerships (strictly restricted to user's memberEmails)
         const mergedPartnershipsMap = new Map<string, Partnership>();
         backup.partnerships
           .filter((p) => p.memberEmails.map((e) => e.toLowerCase()).includes(email))
           .forEach((p) => mergedPartnershipsMap.set(p.id, p));
-        (data.partnerships || []).forEach((p) => mergedPartnershipsMap.set(p.id, p));
+        (data.partnerships || [])
+          .filter((p) => p.memberEmails.map((e) => e.toLowerCase()).includes(email))
+          .forEach((p) => mergedPartnershipsMap.set(p.id, p));
 
         const list = Array.from(mergedPartnershipsMap.values());
         this.partnerships.set(list);
@@ -459,11 +557,26 @@ export class FirebaseService {
           mergedRequests.sort((a, b) => b.dateAdded.localeCompare(a.dateAdded));
           this.requests.set(mergedRequests);
 
+          const mergedMessages = mergeById(backup.messages[targetPid] || [], subData.messages || []);
+          mergedMessages.sort((a, b) => b.date.localeCompare(a.date));
+          this.messages.set(mergedMessages);
+
+          const mergedAuthorities = mergeById(backup.authorities[targetPid] || [], subData.authorities || []);
+          mergedAuthorities.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+          this.authorities.set(mergedAuthorities);
+
+          const mergedSeeds = mergeById(backup.seeds[targetPid] || [], subData.seeds || []);
+          mergedSeeds.sort((a, b) => b.date.localeCompare(a.date));
+          this.seeds.set(mergedSeeds);
+
           // Persist merged state locally
           backup.partnerships = list;
           backup.sessions[targetPid] = mergedSessions;
           backup.testimonies[targetPid] = mergedTestimonies;
           backup.requests[targetPid] = mergedRequests;
+          backup.messages[targetPid] = mergedMessages;
+          backup.authorities[targetPid] = mergedAuthorities;
+          backup.seeds[targetPid] = mergedSeeds;
           this.saveLocalBackup(backup);
         }
         return;
@@ -482,11 +595,14 @@ export class FirebaseService {
       this.sessions.set(backup.sessions[pid] || []);
       this.testimonies.set(backup.testimonies[pid] || []);
       this.requests.set(backup.requests[pid] || []);
+      this.messages.set(backup.messages[pid] || []);
+      this.authorities.set(backup.authorities[pid] || []);
+      this.seeds.set(backup.seeds[pid] || []);
     }
   }
 
   private async pushToFallbackCloud(
-    type: 'partnership' | 'sessions' | 'testimonies' | 'requests',
+    type: 'partnership' | 'sessions' | 'testimonies' | 'requests' | 'messages' | 'authorities' | 'seeds',
     action: 'upsert' | 'delete',
     item: Record<string, unknown>,
     partnershipId?: string
@@ -527,6 +643,15 @@ export class FirebaseService {
       } else if (type === 'requests') {
         const list = [...backup.requests[partnershipId]].sort((a, b) => b.dateAdded.localeCompare(a.dateAdded));
         this.requests.set(list);
+      } else if (type === 'messages') {
+        const list = [...backup.messages[partnershipId]].sort((a, b) => b.date.localeCompare(a.date));
+        this.messages.set(list);
+      } else if (type === 'authorities') {
+        const list = [...backup.authorities[partnershipId]].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        this.authorities.set(list);
+      } else if (type === 'seeds') {
+        const list = [...backup.seeds[partnershipId]].sort((a, b) => b.date.localeCompare(a.date));
+        this.seeds.set(list);
       }
     }
 
@@ -610,6 +735,9 @@ export class FirebaseService {
           this.sessions.set([]);
           this.testimonies.set([]);
           this.requests.set([]);
+          this.messages.set([]);
+          this.authorities.set([]);
+          this.seeds.set([]);
         }
       },
       (error) => {
@@ -636,6 +764,9 @@ export class FirebaseService {
     if (this.unsubSessions) this.unsubSessions();
     if (this.unsubTestimonies) this.unsubTestimonies();
     if (this.unsubRequests) this.unsubRequests();
+    if (this.unsubMessages) this.unsubMessages();
+    if (this.unsubAuthorities) this.unsubAuthorities();
+    if (this.unsubSeeds) this.unsubSeeds();
 
     // 1. Sessions
     const sessionsPath = `partnerships/${partnershipId}/sessions`;
@@ -646,7 +777,6 @@ export class FirebaseService {
         snapshot.forEach((d) => {
           list.push({ ...d.data(), id: d.id } as PrayerSession);
         });
-        // Sort descending by date
         list.sort((a, b) => b.date.localeCompare(a.date));
         this.sessions.set(list);
       },
@@ -688,6 +818,57 @@ export class FirebaseService {
         handleFirestoreError(error, OperationType.GET, requestsPath);
       }
     );
+
+    // 4. Messages (Listening Tracker)
+    const messagesPath = `partnerships/${partnershipId}/messages`;
+    this.unsubMessages = onSnapshot(
+      collection(db, messagesPath),
+      (snapshot) => {
+        const list: MessageListeningRecord[] = [];
+        snapshot.forEach((d) => {
+          list.push({ ...d.data(), id: d.id } as MessageListeningRecord);
+        });
+        list.sort((a, b) => b.date.localeCompare(a.date));
+        this.messages.set(list);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, messagesPath);
+      }
+    );
+
+    // 5. Authority Figures (Seed Targets)
+    const authoritiesPath = `partnerships/${partnershipId}/authorities`;
+    this.unsubAuthorities = onSnapshot(
+      collection(db, authoritiesPath),
+      (snapshot) => {
+        const list: AuthorityFigureSeed[] = [];
+        snapshot.forEach((d) => {
+          list.push({ ...d.data(), id: d.id } as AuthorityFigureSeed);
+        });
+        list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        this.authorities.set(list);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, authoritiesPath);
+      }
+    );
+
+    // 6. Seeds Given
+    const seedsPath = `partnerships/${partnershipId}/seeds`;
+    this.unsubSeeds = onSnapshot(
+      collection(db, seedsPath),
+      (snapshot) => {
+        const list: SeedGivingRecord[] = [];
+        snapshot.forEach((d) => {
+          list.push({ ...d.data(), id: d.id } as SeedGivingRecord);
+        });
+        list.sort((a, b) => b.date.localeCompare(a.date));
+        this.seeds.set(list);
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, seedsPath);
+      }
+    );
   }
 
   private clearSubscriptions() {
@@ -695,15 +876,24 @@ export class FirebaseService {
     if (this.unsubSessions) this.unsubSessions();
     if (this.unsubTestimonies) this.unsubTestimonies();
     if (this.unsubRequests) this.unsubRequests();
+    if (this.unsubMessages) this.unsubMessages();
+    if (this.unsubAuthorities) this.unsubAuthorities();
+    if (this.unsubSeeds) this.unsubSeeds();
     this.unsubPartnerships = null;
     this.unsubSessions = null;
     this.unsubTestimonies = null;
     this.unsubRequests = null;
+    this.unsubMessages = null;
+    this.unsubAuthorities = null;
+    this.unsubSeeds = null;
     this.partnerships.set([]);
     this.activePartnershipId.set(null);
     this.sessions.set([]);
     this.testimonies.set([]);
     this.requests.set([]);
+    this.messages.set([]);
+    this.authorities.set([]);
+    this.seeds.set([]);
   }
 
   // --- Partnership Operations ---
@@ -718,7 +908,8 @@ export class FirebaseService {
       periodTargetMinutes: number;
       periodStartDate: string;
       periodEndDate: string;
-    }
+    },
+    circleType: 'individual' | 'partner' = 'partner'
   ): Promise<string> {
     const user = this.currentUser();
     if (!user) throw new Error('User must be logged in to create a prayer partnership');
@@ -726,13 +917,14 @@ export class FirebaseService {
     const currentUserEmail = (user.email || '').toLowerCase().trim();
     const currentUserName = user.displayName || currentUserEmail.split('@')[0] || 'Me';
 
-    // Normalize emails and ensure creator is included
+    // If individual private space, only include creator's email so nobody else can see it.
+    // If with partner, include partner emails so only those partners can see the circle they belong to.
+    const rawEmails = circleType === 'individual'
+      ? [currentUserEmail]
+      : [currentUserEmail, ...partnerEmailsInput.map((e) => e.toLowerCase().trim())];
+
     const cleanEmails = Array.from(
-      new Set(
-        [currentUserEmail, ...partnerEmailsInput.map((e) => e.toLowerCase().trim())].filter(
-          (e) => e.length > 0 && e.includes('@')
-        )
-      )
+      new Set(rawEmails.filter((e) => e.length > 0 && e.includes('@')))
     );
 
     const pId = 'partnership-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
@@ -740,7 +932,8 @@ export class FirebaseService {
 
     const newPartnership: Partnership = {
       id: pId,
-      name: name.trim() || 'Prayer Accountability Circle',
+      name: name.trim() || (circleType === 'individual' ? 'Private Prayer Space' : 'Prayer Accountability Circle'),
+      circleType,
       createdBy: user.uid,
       memberUids: [user.uid],
       memberEmails: cleanEmails,
@@ -785,13 +978,14 @@ export class FirebaseService {
     const updatedEmails = [...p.memberEmails, normalizedEmail];
 
     if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('partnership', 'upsert', { ...p, memberEmails: updatedEmails } as unknown as Record<string, unknown>);
+      await this.pushToFallbackCloud('partnership', 'upsert', { ...p, circleType: 'partner', memberEmails: updatedEmails } as unknown as Record<string, unknown>);
       return;
     }
 
     const pPath = `partnerships/${partnershipId}`;
     try {
       await updateDoc(doc(db, 'partnerships', partnershipId), {
+        circleType: 'partner',
         memberEmails: updatedEmails,
       });
     } catch (err) {
@@ -1296,6 +1490,280 @@ export class FirebaseService {
     }
   }
 
+  // --- Message Listening Operations ---
+
+  async addMessageRecord(
+    data: Omit<MessageListeningRecord, 'id' | 'partnershipId' | 'authorUid' | 'authorName' | 'createdAt'>
+  ): Promise<string> {
+    const pId = this.activePartnershipId();
+    const user = this.currentUser();
+    if (!pId || !user) throw new Error('Active circle and user required');
+
+    const mId = 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const mPath = `partnerships/${pId}/messages/${mId}`;
+    const dur = Number(data.durationMinutes) || 0;
+
+    const newMsg: Record<string, unknown> = {
+      id: mId,
+      partnershipId: pId,
+      authorUid: user.uid,
+      authorName: user.displayName || user.email?.split('@')[0] || 'Partner',
+      title: data.title.trim(),
+      speaker: data.speaker ? data.speaker.trim() : '',
+      date: data.date,
+      durationMinutes: dur,
+      initialDurationMinutes: Number(data.initialDurationMinutes) || dur,
+      listenCount: Number(data.listenCount) || 1,
+      notes: data.notes ? data.notes.trim() : '',
+      wasTogether: !!data.wasTogether,
+      createdAt: new Date().toISOString(),
+    };
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('messages', 'upsert', removeUndefinedFields(newMsg), pId);
+      return mId;
+    }
+
+    try {
+      await setDoc(doc(db, 'partnerships', pId, 'messages', mId), removeUndefinedFields(newMsg));
+      return mId;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, mPath);
+      throw err;
+    }
+  }
+
+  async updateMessageRecord(record: MessageListeningRecord): Promise<void> {
+    const pId = this.activePartnershipId();
+    if (!pId) return;
+    const mPath = `partnerships/${pId}/messages/${record.id}`;
+    const dur = Number(record.durationMinutes) || 0;
+
+    const updatedData: Record<string, unknown> = {
+      title: record.title.trim(),
+      speaker: record.speaker ? record.speaker.trim() : '',
+      date: record.date,
+      durationMinutes: dur,
+      initialDurationMinutes: Number(record.initialDurationMinutes) || dur,
+      listenCount: Number(record.listenCount) || 1,
+      notes: record.notes ? record.notes.trim() : '',
+      wasTogether: !!record.wasTogether,
+    };
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud(
+        'messages',
+        'upsert',
+        removeUndefinedFields({ ...record, ...updatedData }),
+        pId
+      );
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, mPath);
+    }
+  }
+
+  /**
+   * Adds additional listening time or repeats the initial recorded duration for an existing message.
+   */
+  async addMoreTimeToMessage(record: MessageListeningRecord, additionalMinutes: number): Promise<void> {
+    const pId = this.activePartnershipId();
+    if (!pId) return;
+    const addMins = Math.max(1, Number(additionalMinutes) || 0);
+    const currentTotal = Number(record.durationMinutes) || 0;
+    const initialMins = Number(record.initialDurationMinutes) || currentTotal;
+    const nextTotal = currentTotal + addMins;
+    const nextCount = (Number(record.listenCount) || 1) + 1;
+    const mPath = `partnerships/${pId}/messages/${record.id}`;
+
+    const updatedData: Record<string, unknown> = {
+      durationMinutes: nextTotal,
+      initialDurationMinutes: initialMins,
+      listenCount: nextCount,
+      date: this.getTodayDateString(),
+    };
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud(
+        'messages',
+        'upsert',
+        removeUndefinedFields({ ...record, ...updatedData }),
+        pId
+      );
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, mPath);
+    }
+  }
+
+  async deleteMessageRecord(messageId: string): Promise<void> {
+    const pId = this.activePartnershipId();
+    if (!pId) return;
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('messages', 'delete', { id: messageId }, pId);
+      return;
+    }
+
+    const mPath = `partnerships/${pId}/messages/${messageId}`;
+    try {
+      await deleteDoc(doc(db, 'partnerships', pId, 'messages', messageId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, mPath);
+    }
+  }
+
+  // --- Authority Figure & Seed Giving Operations ---
+
+  async addAuthorityFigure(
+    data: Omit<AuthorityFigureSeed, 'id' | 'partnershipId' | 'authorUid' | 'authorName' | 'createdAt'>
+  ): Promise<string> {
+    const pId = this.activePartnershipId();
+    const user = this.currentUser();
+    if (!pId || !user) throw new Error('Active circle and user required');
+
+    const aId = 'auth-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const aPath = `partnerships/${pId}/authorities/${aId}`;
+
+    const newAuthority: Record<string, unknown> = {
+      id: aId,
+      partnershipId: pId,
+      authorUid: user.uid,
+      authorName: user.displayName || user.email?.split('@')[0] || 'Partner',
+      authorityName: data.authorityName.trim(),
+      roleTitle: data.roleTitle ? data.roleTitle.trim() : '',
+      currency: data.currency || 'USD',
+      yearTargetAmount: Number(data.yearTargetAmount) || 0,
+      targetYear: data.targetYear || String(new Date().getFullYear()),
+      mode: data.mode || 'individual',
+      createdAt: new Date().toISOString(),
+    };
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('authorities', 'upsert', removeUndefinedFields(newAuthority), pId);
+      return aId;
+    }
+
+    try {
+      await setDoc(doc(db, 'partnerships', pId, 'authorities', aId), removeUndefinedFields(newAuthority));
+      return aId;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, aPath);
+      throw err;
+    }
+  }
+
+  async updateAuthorityFigure(authority: AuthorityFigureSeed): Promise<void> {
+    const pId = this.activePartnershipId();
+    if (!pId) return;
+    const aPath = `partnerships/${pId}/authorities/${authority.id}`;
+
+    const updatedData: Record<string, unknown> = {
+      authorityName: authority.authorityName.trim(),
+      roleTitle: authority.roleTitle ? authority.roleTitle.trim() : '',
+      currency: authority.currency || 'USD',
+      yearTargetAmount: Number(authority.yearTargetAmount) || 0,
+      targetYear: authority.targetYear || String(new Date().getFullYear()),
+      mode: authority.mode || 'individual',
+    };
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud(
+        'authorities',
+        'upsert',
+        removeUndefinedFields({ ...authority, ...updatedData }),
+        pId
+      );
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'partnerships', pId, 'authorities', authority.id), removeUndefinedFields(updatedData));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, aPath);
+    }
+  }
+
+  async deleteAuthorityFigure(authorityId: string): Promise<void> {
+    const pId = this.activePartnershipId();
+    if (!pId) return;
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('authorities', 'delete', { id: authorityId }, pId);
+      return;
+    }
+
+    const aPath = `partnerships/${pId}/authorities/${authorityId}`;
+    try {
+      await deleteDoc(doc(db, 'partnerships', pId, 'authorities', authorityId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, aPath);
+    }
+  }
+
+  async addSeedRecord(
+    data: Omit<SeedGivingRecord, 'id' | 'partnershipId' | 'authorUid' | 'authorName' | 'createdAt'>
+  ): Promise<string> {
+    const pId = this.activePartnershipId();
+    const user = this.currentUser();
+    if (!pId || !user) throw new Error('Active circle and user required');
+
+    const seedId = 'seed-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+    const seedPath = `partnerships/${pId}/seeds/${seedId}`;
+
+    const newSeed: Record<string, unknown> = {
+      id: seedId,
+      partnershipId: pId,
+      authorityId: data.authorityId,
+      authorityName: data.authorityName,
+      authorUid: user.uid,
+      authorName: user.displayName || user.email?.split('@')[0] || 'Partner',
+      amount: Number(data.amount) || 0,
+      date: data.date,
+      mode: data.mode || 'individual',
+      notes: data.notes ? data.notes.trim() : '',
+      createdAt: new Date().toISOString(),
+    };
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('seeds', 'upsert', removeUndefinedFields(newSeed), pId);
+      return seedId;
+    }
+
+    try {
+      await setDoc(doc(db, 'partnerships', pId, 'seeds', seedId), removeUndefinedFields(newSeed));
+      return seedId;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, seedPath);
+      throw err;
+    }
+  }
+
+  async deleteSeedRecord(seedId: string): Promise<void> {
+    const pId = this.activePartnershipId();
+    if (!pId) return;
+
+    if (this.isFallbackMode() || !auth.currentUser) {
+      await this.pushToFallbackCloud('seeds', 'delete', { id: seedId }, pId);
+      return;
+    }
+
+    const seedPath = `partnerships/${pId}/seeds/${seedId}`;
+    try {
+      await deleteDoc(doc(db, 'partnerships', pId, 'seeds', seedId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, seedPath);
+    }
+  }
+
   // --- Computed Analytics for Active Partnership ---
 
   readonly activePartnership = computed<Partnership | null>(() => {
@@ -1310,6 +1778,134 @@ export class FirebaseService {
     const list = this.sessions();
     if (filter === 'all') return list;
     return list.filter((s) => s.authorUid === filter || s.authorName === filter || s.participantNames?.includes(filter));
+  });
+
+  // Filtered messages based on activeFilterMember
+  readonly filteredMessages = computed<MessageListeningRecord[]>(() => {
+    const filter = this.activeFilterMember();
+    const list = this.messages();
+    if (filter === 'all') return list;
+    return list.filter((m) => m.authorUid === filter || m.authorName === filter);
+  });
+
+  readonly totalMessageMinutes = computed(() => {
+    return this.filteredMessages().reduce((acc, m) => acc + (Number(m.durationMinutes) || 0), 0);
+  });
+
+  readonly totalMessageRepeats = computed(() => {
+    return this.filteredMessages().reduce((acc, m) => acc + (Number(m.listenCount) || 1), 0);
+  });
+
+  // High-level Seed Totals across all specified Authority Figures (Main currency: GHS with live conversion)
+  readonly seedTotalsSummary = computed(() => {
+    const authorities = this.authorities();
+    const seeds = this.seeds();
+    const rates = this.fxToGhs();
+    const primaryCurrency = 'GHS';
+
+    let totalTargetGhs = 0;
+    let totalGivenGhs = 0;
+    let hasForeignCurrency = false;
+
+    const byCurrencyMap = new Map<
+      string,
+      {
+        currency: string;
+        target: number;
+        given: number;
+        remaining: number;
+        rateToGhs: number;
+        targetGhs: number;
+        givenGhs: number;
+        remainingGhs: number;
+      }
+    >();
+
+    for (const authItem of authorities) {
+      const curr = (authItem.currency || 'GHS').toUpperCase();
+      if (curr !== 'GHS') hasForeignCurrency = true;
+      const rate = curr === 'GHS' ? 1 : rates[curr] || 1;
+      const t = Number(authItem.yearTargetAmount) || 0;
+      const tGhs = t * rate;
+      totalTargetGhs += tGhs;
+
+      const entry = byCurrencyMap.get(curr) || {
+        currency: curr,
+        target: 0,
+        given: 0,
+        remaining: 0,
+        rateToGhs: rate,
+        targetGhs: 0,
+        givenGhs: 0,
+        remainingGhs: 0,
+      };
+      entry.target += t;
+      entry.targetGhs += tGhs;
+      byCurrencyMap.set(curr, entry);
+    }
+
+    for (const s of seeds) {
+      const amt = Number(s.amount) || 0;
+      const parentAuth = authorities.find((a) => a.id === s.authorityId);
+      const curr = (parentAuth?.currency || 'GHS').toUpperCase();
+      if (curr !== 'GHS') hasForeignCurrency = true;
+      const rate = curr === 'GHS' ? 1 : rates[curr] || 1;
+      const amtGhs = amt * rate;
+      totalGivenGhs += amtGhs;
+
+      const entry = byCurrencyMap.get(curr) || {
+        currency: curr,
+        target: 0,
+        given: 0,
+        remaining: 0,
+        rateToGhs: rate,
+        targetGhs: 0,
+        givenGhs: 0,
+        remainingGhs: 0,
+      };
+      entry.given += amt;
+      entry.givenGhs += amtGhs;
+      byCurrencyMap.set(curr, entry);
+    }
+
+    const byCurrency = Array.from(byCurrencyMap.values()).map((c) => {
+      const rem = Math.max(0, c.target - c.given);
+      const remGhs = Math.max(0, c.targetGhs - c.givenGhs);
+      return {
+        ...c,
+        remaining: rem,
+        remainingGhs: remGhs,
+        pct: c.target > 0 ? Math.min(100, Math.round((c.given / c.target) * 1000) / 10) : 0,
+      };
+    });
+
+    const totalRemainingGhs = Math.max(0, totalTargetGhs - totalGivenGhs);
+    const progressPct =
+      totalTargetGhs > 0 ? Math.min(100, Math.round((totalGivenGhs / totalTargetGhs) * 1000) / 10) : 0;
+
+    return {
+      primaryCurrency,
+      totalTarget: totalTargetGhs,
+      totalGiven: totalGivenGhs,
+      totalRemaining: totalRemainingGhs,
+      progressPct,
+      hasForeignCurrency,
+      authoritiesCount: authorities.length,
+      seedsCount: seeds.length,
+      byCurrency,
+    };
+  });
+
+  readonly totalAmensCount = computed(() => {
+    return this.testimonies().reduce((acc, t) => acc + (Number(t.amensCount) || 0), 0);
+  });
+
+  readonly activeRequestsCount = computed(() => {
+    return this.requests().filter((r) => r.status !== 'answered').length;
+  });
+
+  readonly answeredRequestsCount = computed(() => {
+    return this.requests().filter((r) => r.status === 'answered').length;
   });
 
   readonly totalMinutes = computed(() => {
