@@ -81,7 +81,7 @@ interface AuthorityCardView {
               GHS {{ firebaseService.formatOneDecimal(seedSummary.totalTarget) }}
             </div>
             <span class="text-[11px] text-stone-500 font-mono tabular-nums">
-              {{ seedSummary.authoritiesCount }} specified {{ seedSummary.authoritiesCount === 1 ? 'target' : 'targets' }}
+              {{ firebaseService.formatInteger(seedSummary.authoritiesCount) }} specified {{ seedSummary.authoritiesCount === 1 ? 'target' : 'targets' }}
             </span>
           </div>
 
@@ -94,7 +94,7 @@ interface AuthorityCardView {
               GHS {{ firebaseService.formatOneDecimal(seedSummary.totalGiven) }}
             </div>
             <span class="text-[11px] text-stone-500 font-mono tabular-nums">
-              {{ firebaseService.formatOneDecimal(seedSummary.progressPct) }}% complete ({{ seedSummary.seedsCount }} seeds)
+              {{ firebaseService.formatOneDecimal(seedSummary.progressPct) }}% complete ({{ firebaseService.formatInteger(seedSummary.seedsCount) }} seeds)
             </span>
           </div>
 
@@ -431,21 +431,88 @@ interface AuthorityCardView {
         </div>
       }
 
+      <!-- Filter & Sort Bar -->
+      @if (firebaseService.authorities().length > 0) {
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
+          <div>
+            <label for="seedSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
+            <input
+              id="seedSearch"
+              type="text"
+              [value]="searchQuery()"
+              (input)="searchQuery.set($any($event.target).value)"
+              placeholder="Search name or note..."
+              class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div>
+            <label for="seedModeFilter" class="block text-[11px] font-medium text-stone-400 mb-1">Mode</label>
+            <select
+              id="seedModeFilter"
+              [value]="filterMode()"
+              (change)="filterMode.set($any($event.target).value)"
+              class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            >
+              <option value="all">All Modes</option>
+              <option value="individual">Alone</option>
+              <option value="partner">Partner</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="seedCurrFilter" class="block text-[11px] font-medium text-stone-400 mb-1">Currency</label>
+            <select
+              id="seedCurrFilter"
+              [value]="filterCurrency()"
+              (change)="filterCurrency.set($any($event.target).value)"
+              class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            >
+              <option value="all">All Currencies</option>
+              <option value="GHS">GHS (₵)</option>
+              <option value="USD">USD ($)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="NGN">NGN (₦)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="seedSort" class="block text-[11px] font-medium text-stone-400 mb-1">Sort</label>
+            <select
+              id="seedSort"
+              [value]="sortBy()"
+              (change)="sortBy.set($any($event.target).value)"
+              class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="highestGiven">Highest Given (GHS)</option>
+              <option value="highestTarget">Highest Target (GHS)</option>
+            </select>
+          </div>
+        </div>
+      }
+
       <!-- Authority Figures & Seed Progress Cards -->
       @if (authorityCards().length === 0) {
         <div class="text-center py-12 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-3">
           <mat-icon class="text-stone-600" style="font-size: 40px;">volunteer_activism</mat-icon>
-          <h3 class="text-base font-semibold text-stone-300">No seed targets yet</h3>
+          <h3 class="text-base font-semibold text-stone-300">
+            {{ firebaseService.authorities().length === 0 ? 'No seed targets yet' : 'No matching seed targets' }}
+          </h3>
           <p class="text-xs text-stone-500 max-w-sm mx-auto">
-            Add an authority figure and annual seed target to begin.
+            {{ firebaseService.authorities().length === 0 ? 'Add an authority figure and annual seed target to begin.' : 'Try adjusting your search or filter options.' }}
           </p>
-          <button
-            type="button"
-            (click)="openAuthorityForm()"
-            class="py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
-          >
-            Add First Target
-          </button>
+          @if (firebaseService.authorities().length === 0) {
+            <button
+              type="button"
+              (click)="openAuthorityForm()"
+              class="py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
+            >
+              Add First Target
+            </button>
+          }
         </div>
       } @else {
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -499,7 +566,7 @@ interface AuthorityCardView {
                       type="button"
                       (click)="deleteAuthority(card.authority.id)"
                       class="p-1.5 rounded-lg text-stone-400 hover:text-red-400 hover:bg-stone-800"
-                      title="Remove Target"
+                      title="Remove Target and All Saved Seeds"
                     >
                       <mat-icon style="font-size: 16px;">delete</mat-icon>
                     </button>
@@ -551,7 +618,7 @@ interface AuthorityCardView {
                       <strong class="text-amber-400 font-mono tabular-nums">{{ firebaseService.formatOneDecimal(card.progressPct) }}%</strong>
                     </span>
                     <span class="text-stone-500 font-mono tabular-nums">
-                      {{ card.records.length }} {{ card.records.length === 1 ? 'entry' : 'entries' }}
+                      {{ firebaseService.formatInteger(card.records.length) }} {{ card.records.length === 1 ? 'entry' : 'entries' }}
                     </span>
                   </div>
                   <div class="h-2.5 w-full bg-stone-950 rounded-full overflow-hidden border border-stone-800">
@@ -562,12 +629,14 @@ interface AuthorityCardView {
                   </div>
                 </div>
 
-                <!-- Seed History List -->
+                <!-- Seed History List (Newest on top) -->
                 @if (card.records.length > 0) {
                   <div class="space-y-2 pt-2 border-t border-stone-800/70">
-                    <span class="text-[11px] font-semibold uppercase tracking-wider text-stone-400 block">
-                      History
-                    </span>
+                    <div class="flex items-center justify-between">
+                      <span class="text-[11px] font-semibold uppercase tracking-wider text-stone-400 block">
+                        History (Newest First)
+                      </span>
+                    </div>
                     <div class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                       @for (s of card.records; track s.id) {
                         <div class="flex items-center justify-between p-2.5 rounded-xl bg-stone-950/70 border border-stone-800/80 text-xs">
@@ -622,6 +691,12 @@ export class SeedTracker {
   readonly isSaving = signal(false);
   readonly editingAuthority = signal<AuthorityFigureSeed | null>(null);
 
+  // Filter & Sort state
+  readonly searchQuery = signal('');
+  readonly filterMode = signal<'all' | 'individual' | 'partner'>('all');
+  readonly filterCurrency = signal<string>('all');
+  readonly sortBy = signal<'newest' | 'oldest' | 'highestGiven' | 'highestTarget'>('newest');
+
   readonly authorityForm = new FormGroup({
     authorityName: new FormControl<string>('', { nonNullable: true, validators: [Validators.required] }),
     roleTitle: new FormControl<string>('', { nonNullable: true }),
@@ -643,11 +718,22 @@ export class SeedTracker {
     const authorities = this.firebaseService.authorities();
     const seeds = this.firebaseService.seeds();
     const rates = this.firebaseService.fxToGhs();
+    const query = this.searchQuery().trim().toLowerCase();
+    const mode = this.filterMode();
+    const currFilter = this.filterCurrency();
+    const sort = this.sortBy();
 
-    return authorities.map((authItem) => {
+    let cards = authorities.map((authItem) => {
       const curr = (authItem.currency || 'GHS').toUpperCase();
       const rate = curr === 'GHS' ? 1 : rates[curr] || 1;
-      const matchingSeeds = seeds.filter((s) => s.authorityId === authItem.id);
+      const matchingSeeds = seeds
+        .filter((s) => s.authorityId === authItem.id)
+        .sort(
+          (a, b) =>
+            (b.date || '').localeCompare(a.date || '') ||
+            (b.createdAt || '').localeCompare(a.createdAt || '') ||
+            (b.id || '').localeCompare(a.id || '')
+        );
       const given = matchingSeeds.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
       const target = Math.max(0.1, Number(authItem.yearTargetAmount) || 0);
       const remaining = Math.max(0, target - given);
@@ -665,6 +751,50 @@ export class SeedTracker {
         progressPct: pct,
         records: matchingSeeds,
       };
+    });
+
+    if (mode !== 'all') {
+      cards = cards.filter((c) => c.authority.mode === mode);
+    }
+
+    if (currFilter !== 'all') {
+      cards = cards.filter((c) => (c.authority.currency || 'GHS').toUpperCase() === currFilter);
+    }
+
+    if (query) {
+      cards = cards.filter(
+        (c) =>
+          c.authority.authorityName.toLowerCase().includes(query) ||
+          (c.authority.roleTitle && c.authority.roleTitle.toLowerCase().includes(query)) ||
+          c.records.some(
+            (r) =>
+              (r.notes && r.notes.toLowerCase().includes(query)) ||
+              r.authorName.toLowerCase().includes(query)
+          )
+      );
+    }
+
+    return [...cards].sort((a, b) => {
+      if (sort === 'oldest') {
+        return (
+          (a.authority.createdAt || '').localeCompare(b.authority.createdAt || '') ||
+          (a.authority.id || '').localeCompare(b.authority.id || '')
+        );
+      }
+      if (sort === 'highestGiven') {
+        return b.givenAmountGhs - a.givenAmountGhs;
+      }
+      if (sort === 'highestTarget') {
+        return b.targetAmountGhs - a.targetAmountGhs;
+      }
+      // Default: 'newest'
+      const aLatest = a.records[0]?.date || a.authority.createdAt || '';
+      const bLatest = b.records[0]?.date || b.authority.createdAt || '';
+      return (
+        bLatest.localeCompare(aLatest) ||
+        (b.authority.createdAt || '').localeCompare(a.authority.createdAt || '') ||
+        (b.authority.id || '').localeCompare(a.authority.id || '')
+      );
     });
   });
 
@@ -775,7 +905,7 @@ export class SeedTracker {
 
   async deleteAuthority(id: string) {
     await this.firebaseService.deleteAuthorityFigure(id);
-    this.saved.emit('Target removed.');
+    this.saved.emit('Target and saved seeds removed.');
   }
 
   async deleteSeed(id: string) {

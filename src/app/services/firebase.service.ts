@@ -15,6 +15,7 @@ import {
   deleteDoc,
   doc,
   getDocFromServer,
+  getDocs,
   getFirestore,
   onSnapshot,
   query,
@@ -73,6 +74,8 @@ export interface AuthDiagnosticError {
 }
 
 const FALLBACK_USER_KEY = 'watchman_partner_auth_user_v1';
+const CACHE_AUTH_USER_KEY = 'watchman_cached_auth_user_v1';
+const ACTIVE_PARTNERSHIP_KEY = 'watchman_active_partnership_id_v1';
 const LOCAL_STORE_KEY = 'watchman_local_cloud_backup_v1';
 
 interface LocalCloudBackup {
@@ -180,17 +183,169 @@ export class FirebaseService {
   private unsubAuthorities: (() => void) | null = null;
   private unsubSeeds: (() => void) | null = null;
   private fallbackPollTimer: ReturnType<typeof setInterval> | null = null;
+  private fxStream: EventSource | null = null;
+  private cloudStream: EventSource | null = null;
 
   constructor() {
+    // 0ms instant hydration from local cache before any network call
+    this.hydrateFromLocalCacheSync();
     this.testConnection();
     this.initAuthListener();
     this.refreshLiveExchangeRates();
+    this.connectFxStream();
+    this.connectCloudStream();
   }
 
-  async refreshLiveExchangeRates(): Promise<void> {
+  /**
+   * Synchronously hydrates user session and active partnership collections from local cache
+   * in 0ms so the UI renders with zero latency on load or login.
+   */
+  private hydrateFromLocalCacheSync(): void {
     if (typeof window === 'undefined') return;
     try {
-      const res = await fetch('/api/fx-rates');
+      const savedActivePid = localStorage.getItem(ACTIVE_PARTNERSHIP_KEY);
+      if (savedActivePid) {
+        this.activePartnershipId.set(savedActivePid);
+      }
+
+      const fallbackUser = this.loadFallbackUser();
+      const cachedAuthUser = this.loadCachedAuthUser();
+      const initialUser = fallbackUser || cachedAuthUser;
+
+      if (initialUser) {
+        this.isFallbackMode.set(!!fallbackUser);
+        this.currentUser.set(initialUser);
+        this.isAuthReady.set(true);
+        this.hydrateCollectionsFromBackupSync(initialUser);
+      }
+    } catch {
+      // ignore local storage read errors
+    }
+  }
+
+  private hydrateCollectionsFromBackupSync(user: User): void {
+    if (typeof window === 'undefined') return;
+    const email = (user.email || '').toLowerCase().trim();
+    if (!email) return;
+    const backup = this.getLocalBackup();
+    const localPartnerships = backup.partnerships.filter((p) =>
+      p.memberEmails.map((e) => e.toLowerCase()).includes(email)
+    );
+    if (localPartnerships.length > 0) {
+      this.partnerships.set(localPartnerships);
+      const currentActive = this.activePartnershipId();
+      const pid =
+        currentActive && localPartnerships.some((p) => p.id === currentActive)
+          ? currentActive
+          : localPartnerships[0].id;
+      this.activePartnershipId.set(pid);
+      localStorage.setItem(ACTIVE_PARTNERSHIP_KEY, pid);
+      this.hydratePartnershipDataFromBackupSync(pid, backup);
+    }
+  }
+
+  private hydratePartnershipDataFromBackupSync(pid: string, backup = this.getLocalBackup()): void {
+    const sessions = [...(backup.sessions[pid] || [])].sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) ||
+        (b.createdAt || b.startTime || '').localeCompare(a.createdAt || a.startTime || '')
+    );
+    const testimonies = [...(backup.testimonies[pid] || [])].sort(
+      (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+    );
+    const requests = [...(backup.requests[pid] || [])].sort(
+      (a, b) => b.dateAdded.localeCompare(a.dateAdded) || b.id.localeCompare(a.id)
+    );
+    const messages = [...(backup.messages[pid] || [])].sort(
+      (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+    );
+    const authorities = [...(backup.authorities[pid] || [])].sort((a, b) =>
+      (b.createdAt || '').localeCompare(a.createdAt || '')
+    );
+    const validAuthIds = new Set(authorities.map((a) => a.id));
+    const seeds = [...(backup.seeds[pid] || [])]
+      .filter((s) => validAuthIds.has(s.authorityId))
+      .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+    this.sessions.set(sessions);
+    this.testimonies.set(testimonies);
+    this.requests.set(requests);
+    this.messages.set(messages);
+    this.authorities.set(authorities);
+    this.seeds.set(seeds);
+  }
+
+  /**
+   * Connects to backend Server-Sent Events (/api/fx-stream) so market currency rates
+   * stream in real time into the frontend whenever market rates shift.
+   */
+  private connectFxStream(): void {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+    try {
+      if (this.fxStream) {
+        this.fxStream.close();
+      }
+      const es = new EventSource('/api/fx-stream');
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data) as {
+            toGhs?: Record<string, number>;
+            source?: 'live' | 'fallback';
+            updatedAt?: string;
+          };
+          if (data.toGhs) {
+            this.fxToGhs.set({ ...this.fxToGhs(), ...data.toGhs, GHS: 1 });
+            this.fxSource.set(data.source || 'live');
+            this.fxUpdatedAt.set(data.updatedAt || new Date().toISOString());
+          }
+        } catch {
+          // ignore malformed SSE frame
+        }
+      };
+      es.onerror = () => {
+        // Browser EventSource automatically reconnects; also trigger a background fetch fallback
+        this.refreshLiveExchangeRates();
+      };
+      this.fxStream = es;
+    } catch {
+      // Fallback to polling if EventSource is blocked
+    }
+  }
+
+  /**
+   * Connects to backend Server-Sent Events (/api/cloud-stream) for real-time 0ms push updates
+   * whenever any partner or tab writes to the cloud store.
+   */
+  private connectCloudStream(): void {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return;
+    try {
+      if (this.cloudStream) {
+        this.cloudStream.close();
+      }
+      const es = new EventSource('/api/cloud-stream');
+      es.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data) as { type?: string };
+          if (payload.type === 'connected') return;
+          const u = this.currentUser();
+          if (u) {
+            void this.loadFromFallbackCloud(u);
+          }
+        } catch {
+          // ignore malformed SSE frame
+        }
+      };
+      this.cloudStream = es;
+    } catch {
+      // ignore if SSE unavailable
+    }
+  }
+
+  async refreshLiveExchangeRates(force = true): Promise<void> {
+    if (typeof window === 'undefined') return;
+    try {
+      const url = force ? '/api/fx-rates?force=1' : '/api/fx-rates';
+      const res = await fetch(url);
       if (res.ok) {
         const data = (await res.json()) as {
           toGhs?: Record<string, number>;
@@ -271,21 +426,26 @@ export class FirebaseService {
           this.lastAuthError.set(null);
           this.isFallbackMode.set(false);
           localStorage.removeItem(FALLBACK_USER_KEY);
+          this.saveCachedAuthUser(result.user);
         }
       })
       .catch((err) => {
         this.recordAuthError(err);
       });
 
-    onAuthStateChanged(auth, async (user) => {
+    onAuthStateChanged(auth, (user) => {
       if (user) {
         this.isFallbackMode.set(false);
         this.stopFallbackPolling();
         localStorage.removeItem(FALLBACK_USER_KEY);
+        this.saveCachedAuthUser(user);
         this.currentUser.set(user);
         this.isAuthReady.set(true);
-        await this.syncUserProfile(user);
+        // 0ms immediate local hydration + non-blocking background profile & Firestore sync
+        this.hydrateCollectionsFromBackupSync(user);
+        void this.syncUserProfile(user);
         this.subscribeToUserPartnerships(user);
+        void this.loadFromFallbackCloud(user);
       } else {
         // Check if the user signed in via Partner Email fallback (e.g. on Render prior to domain authorization)
         const savedFallback = this.loadFallbackUser();
@@ -293,9 +453,11 @@ export class FirebaseService {
           this.isFallbackMode.set(true);
           this.currentUser.set(savedFallback);
           this.isAuthReady.set(true);
-          await this.loadFromFallbackCloud(savedFallback);
+          this.hydrateCollectionsFromBackupSync(savedFallback);
+          void this.loadFromFallbackCloud(savedFallback);
           this.startFallbackPolling(savedFallback);
         } else {
+          localStorage.removeItem(CACHE_AUTH_USER_KEY);
           this.isFallbackMode.set(false);
           this.currentUser.set(null);
           this.isAuthReady.set(true);
@@ -303,6 +465,49 @@ export class FirebaseService {
         }
       }
     });
+  }
+
+  private saveCachedAuthUser(user: User): void {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(
+        CACHE_AUTH_USER_KEY,
+        JSON.stringify({
+          uid: user.uid,
+          email: user.email || '',
+          displayName: user.displayName || user.email?.split('@')[0] || 'Intercessor',
+          photoURL: user.photoURL || null,
+        })
+      );
+    } catch {
+      // ignore
+    }
+  }
+
+  private loadCachedAuthUser(): User | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(CACHE_AUTH_USER_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as {
+        uid: string;
+        email: string;
+        displayName: string;
+        photoURL?: string | null;
+      };
+      if (!parsed.email) return null;
+      return {
+        uid: parsed.uid,
+        email: parsed.email,
+        displayName: parsed.displayName,
+        emailVerified: true,
+        isAnonymous: false,
+        photoURL: parsed.photoURL || null,
+        providerData: [{ providerId: 'google.com', email: parsed.email, displayName: parsed.displayName }],
+      } as unknown as User;
+    } catch {
+      return null;
+    }
   }
 
   private recordAuthError(err: unknown): AuthDiagnosticError {
@@ -337,6 +542,10 @@ export class FirebaseService {
       const result = await signInWithPopup(auth, provider);
       this.isFallbackMode.set(false);
       localStorage.removeItem(FALLBACK_USER_KEY);
+      this.saveCachedAuthUser(result.user);
+      this.currentUser.set(result.user);
+      this.isAuthReady.set(true);
+      this.hydrateCollectionsFromBackupSync(result.user);
       return result.user;
     } catch (err) {
       const diag = this.recordAuthError(err);
@@ -363,10 +572,9 @@ export class FirebaseService {
   }
 
   /**
-   * Direct Partner Email & Name Sign-In:
-   * Allows users on Render (or any custom host) to sign in immediately using their
-   * Google email address and name even before the domain is added to Firebase Console's
-   * Authorized Domains list.
+   * Direct Partner Email & Name Sign-In (0ms instant response):
+   * Sets authenticated state and hydrates cached data synchronously in 0ms,
+   * while syncing with the cloud store in the background.
    */
   async loginWithPartnerEmail(emailInput: string, displayNameInput: string): Promise<User> {
     const cleanEmail = emailInput.toLowerCase().trim();
@@ -393,11 +601,15 @@ export class FirebaseService {
       );
     }
 
+    // 0ms immediate state transition & local cache hydration
     this.lastAuthError.set(null);
     this.isFallbackMode.set(true);
     this.currentUser.set(fallbackUser);
     this.isAuthReady.set(true);
-    await this.loadFromFallbackCloud(fallbackUser);
+    this.hydrateCollectionsFromBackupSync(fallbackUser);
+
+    // Non-blocking background cloud sync & real-time polling
+    void this.loadFromFallbackCloud(fallbackUser);
     this.startFallbackPolling(fallbackUser);
     return fallbackUser;
   }
@@ -427,6 +639,7 @@ export class FirebaseService {
     this.stopFallbackPolling();
     if (typeof window !== 'undefined') {
       localStorage.removeItem(FALLBACK_USER_KEY);
+      localStorage.removeItem(CACHE_AUTH_USER_KEY);
     }
     this.isFallbackMode.set(false);
     this.currentUser.set(null);
@@ -473,10 +686,20 @@ export class FirebaseService {
     }
   }
 
+  private mirrorCollectionToLocalBackup<K extends keyof Omit<LocalCloudBackup, 'partnerships'>>(
+    type: K,
+    partnershipId: string,
+    items: LocalCloudBackup[K][string]
+  ): void {
+    const backup = this.getLocalBackup();
+    backup[type][partnershipId] = items;
+    this.saveLocalBackup(backup);
+  }
+
   private startFallbackPolling(user: User) {
     this.stopFallbackPolling();
     this.fallbackPollTimer = setInterval(() => {
-      this.loadFromFallbackCloud(user);
+      void this.loadFromFallbackCloud(user);
     }, 8000);
   }
 
@@ -524,6 +747,7 @@ export class FirebaseService {
         if (list.length > 0 && (!targetPid || !list.some((p) => p.id === targetPid))) {
           targetPid = list[0].id;
           this.activePartnershipId.set(targetPid);
+          localStorage.setItem(ACTIVE_PARTNERSHIP_KEY, targetPid);
         }
 
         if (targetPid) {
@@ -546,27 +770,42 @@ export class FirebaseService {
           };
 
           const mergedSessions = mergeById(backup.sessions[targetPid] || [], subData.sessions || []);
-          mergedSessions.sort((a, b) => b.date.localeCompare(a.date));
+          mergedSessions.sort(
+            (a, b) =>
+              b.date.localeCompare(a.date) ||
+              (b.createdAt || b.startTime || '').localeCompare(a.createdAt || a.startTime || '')
+          );
           this.sessions.set(mergedSessions);
 
           const mergedTestimonies = mergeById(backup.testimonies[targetPid] || [], subData.testimonies || []);
-          mergedTestimonies.sort((a, b) => b.date.localeCompare(a.date));
+          mergedTestimonies.sort(
+            (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+          );
           this.testimonies.set(mergedTestimonies);
 
           const mergedRequests = mergeById(backup.requests[targetPid] || [], subData.requests || []);
-          mergedRequests.sort((a, b) => b.dateAdded.localeCompare(a.dateAdded));
+          mergedRequests.sort(
+            (a, b) => b.dateAdded.localeCompare(a.dateAdded) || b.id.localeCompare(a.id)
+          );
           this.requests.set(mergedRequests);
 
           const mergedMessages = mergeById(backup.messages[targetPid] || [], subData.messages || []);
-          mergedMessages.sort((a, b) => b.date.localeCompare(a.date));
+          mergedMessages.sort(
+            (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+          );
           this.messages.set(mergedMessages);
 
           const mergedAuthorities = mergeById(backup.authorities[targetPid] || [], subData.authorities || []);
-          mergedAuthorities.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+          mergedAuthorities.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
           this.authorities.set(mergedAuthorities);
 
-          const mergedSeeds = mergeById(backup.seeds[targetPid] || [], subData.seeds || []);
-          mergedSeeds.sort((a, b) => b.date.localeCompare(a.date));
+          const validAuthIds = new Set(mergedAuthorities.map((a) => a.id));
+          const mergedSeeds = mergeById(backup.seeds[targetPid] || [], subData.seeds || []).filter(
+            (s) => validAuthIds.has(s.authorityId)
+          );
+          mergedSeeds.sort(
+            (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+          );
           this.seeds.set(mergedSeeds);
 
           // Persist merged state locally
@@ -585,28 +824,20 @@ export class FirebaseService {
       // Fallback to localStorage if offline
     }
 
-    const localPartnerships = backup.partnerships.filter((p) =>
-      p.memberEmails.map((e) => e.toLowerCase()).includes(email)
-    );
-    this.partnerships.set(localPartnerships);
-    if (localPartnerships.length > 0) {
-      const pid = activeId && localPartnerships.some((p) => p.id === activeId) ? activeId : localPartnerships[0].id;
-      this.activePartnershipId.set(pid);
-      this.sessions.set(backup.sessions[pid] || []);
-      this.testimonies.set(backup.testimonies[pid] || []);
-      this.requests.set(backup.requests[pid] || []);
-      this.messages.set(backup.messages[pid] || []);
-      this.authorities.set(backup.authorities[pid] || []);
-      this.seeds.set(backup.seeds[pid] || []);
-    }
+    this.hydrateCollectionsFromBackupSync(user);
   }
 
-  private async pushToFallbackCloud(
+  /**
+   * 0ms Optimistic State & Local Cache Update + Non-Blocking Background Cloud Sync.
+   * Updates signals and localStorage synchronously in 0ms and dispatches the HTTP POST
+   * in the background without blocking UI interactions.
+   */
+  private pushToFallbackCloud(
     type: 'partnership' | 'sessions' | 'testimonies' | 'requests' | 'messages' | 'authorities' | 'seeds',
     action: 'upsert' | 'delete',
     item: Record<string, unknown>,
     partnershipId?: string
-  ) {
+  ): void {
     const backup = this.getLocalBackup();
     const itemId = String(item['id'] || '');
 
@@ -628,6 +859,16 @@ export class FirebaseService {
       const idx = arr.findIndex((x) => x['id'] === itemId);
       if (action === 'delete') {
         if (idx >= 0) arr.splice(idx, 1);
+        // Cascade delete all seed amounts recorded for this deleted authority target
+        if (type === 'authorities' && backup.seeds[partnershipId]) {
+          backup.seeds[partnershipId] = backup.seeds[partnershipId].filter(
+            (s) => s.authorityId !== itemId
+          );
+          const remainingSeeds = [...backup.seeds[partnershipId]].sort(
+            (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+          );
+          this.seeds.set(remainingSeeds);
+        }
       } else if (idx >= 0) {
         arr[idx] = { ...arr[idx], ...item };
       } else {
@@ -635,22 +876,36 @@ export class FirebaseService {
       }
 
       if (type === 'sessions') {
-        const list = [...backup.sessions[partnershipId]].sort((a, b) => b.date.localeCompare(a.date));
+        const list = [...backup.sessions[partnershipId]].sort(
+          (a, b) =>
+            b.date.localeCompare(a.date) ||
+            (b.createdAt || b.startTime || '').localeCompare(a.createdAt || a.startTime || '')
+        );
         this.sessions.set(list);
       } else if (type === 'testimonies') {
-        const list = [...backup.testimonies[partnershipId]].sort((a, b) => b.date.localeCompare(a.date));
+        const list = [...backup.testimonies[partnershipId]].sort(
+          (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+        );
         this.testimonies.set(list);
       } else if (type === 'requests') {
-        const list = [...backup.requests[partnershipId]].sort((a, b) => b.dateAdded.localeCompare(a.dateAdded));
+        const list = [...backup.requests[partnershipId]].sort(
+          (a, b) => b.dateAdded.localeCompare(a.dateAdded) || b.id.localeCompare(a.id)
+        );
         this.requests.set(list);
       } else if (type === 'messages') {
-        const list = [...backup.messages[partnershipId]].sort((a, b) => b.date.localeCompare(a.date));
+        const list = [...backup.messages[partnershipId]].sort(
+          (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+        );
         this.messages.set(list);
       } else if (type === 'authorities') {
-        const list = [...backup.authorities[partnershipId]].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        const list = [...backup.authorities[partnershipId]].sort((a, b) =>
+          (b.createdAt || '').localeCompare(a.createdAt || '')
+        );
         this.authorities.set(list);
       } else if (type === 'seeds') {
-        const list = [...backup.seeds[partnershipId]].sort((a, b) => b.date.localeCompare(a.date));
+        const list = [...backup.seeds[partnershipId]].sort(
+          (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+        );
         this.seeds.set(list);
       }
     }
@@ -658,15 +913,13 @@ export class FirebaseService {
     this.saveLocalBackup(backup);
 
     if (typeof window !== 'undefined') {
-      try {
-        await fetch('/api/cloud-sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, action, partnershipId, item }),
-        });
-      } catch {
-        // ignore network error; saved in local backup
-      }
+      void fetch('/api/cloud-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, action, partnershipId, item }),
+      }).catch(() => {
+        // ignore network error; already persisted in local backup
+      });
     }
   }
 
@@ -689,11 +942,11 @@ export class FirebaseService {
 
   private subscribeToUserPartnerships(user: User) {
     if (this.isFallbackMode() || !auth.currentUser) {
-      this.loadFromFallbackCloud(user);
+      void this.loadFromFallbackCloud(user);
       return;
     }
 
-    this.clearSubscriptions();
+    this.clearSubscriptions(false);
     const userEmail = (user.email || '').toLowerCase();
     const partnershipsPath = 'partnerships';
 
@@ -723,12 +976,17 @@ export class FirebaseService {
         });
 
         this.partnerships.set(list);
+        const backup = this.getLocalBackup();
+        backup.partnerships = list;
+        this.saveLocalBackup(backup);
 
         // Auto-select active partnership
         if (list.length > 0) {
           const current = this.activePartnershipId();
           if (!current || !list.some((p) => p.id === current)) {
             this.selectPartnership(list[0].id);
+          } else {
+            this.subscribeToPartnershipData(current);
           }
         } else {
           this.activePartnershipId.set(null);
@@ -749,9 +1007,15 @@ export class FirebaseService {
   selectPartnership(partnershipId: string) {
     this.activePartnershipId.set(partnershipId);
     this.activeFilterMember.set('all');
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(ACTIVE_PARTNERSHIP_KEY, partnershipId);
+    }
+    // 0ms immediate local hydration for the selected partnership
+    this.hydratePartnershipDataFromBackupSync(partnershipId);
+
     if (this.isFallbackMode() || !auth.currentUser) {
       const u = this.currentUser();
-      if (u) this.loadFromFallbackCloud(u);
+      if (u) void this.loadFromFallbackCloud(u);
       return;
     }
     this.subscribeToPartnershipData(partnershipId);
@@ -768,7 +1032,7 @@ export class FirebaseService {
     if (this.unsubAuthorities) this.unsubAuthorities();
     if (this.unsubSeeds) this.unsubSeeds();
 
-    // 1. Sessions
+    // 1. Sessions (Newest on top)
     const sessionsPath = `partnerships/${partnershipId}/sessions`;
     this.unsubSessions = onSnapshot(
       collection(db, sessionsPath),
@@ -777,15 +1041,20 @@ export class FirebaseService {
         snapshot.forEach((d) => {
           list.push({ ...d.data(), id: d.id } as PrayerSession);
         });
-        list.sort((a, b) => b.date.localeCompare(a.date));
+        list.sort(
+          (a, b) =>
+            b.date.localeCompare(a.date) ||
+            (b.createdAt || b.startTime || '').localeCompare(a.createdAt || a.startTime || '')
+        );
         this.sessions.set(list);
+        this.mirrorCollectionToLocalBackup('sessions', partnershipId, list);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, sessionsPath);
       }
     );
 
-    // 2. Testimonies
+    // 2. Testimonies (Newest on top)
     const testimoniesPath = `partnerships/${partnershipId}/testimonies`;
     this.unsubTestimonies = onSnapshot(
       collection(db, testimoniesPath),
@@ -794,15 +1063,18 @@ export class FirebaseService {
         snapshot.forEach((d) => {
           list.push({ ...d.data(), id: d.id } as Testimony);
         });
-        list.sort((a, b) => b.date.localeCompare(a.date));
+        list.sort(
+          (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+        );
         this.testimonies.set(list);
+        this.mirrorCollectionToLocalBackup('testimonies', partnershipId, list);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, testimoniesPath);
       }
     );
 
-    // 3. Requests
+    // 3. Requests (Newest on top)
     const requestsPath = `partnerships/${partnershipId}/requests`;
     this.unsubRequests = onSnapshot(
       collection(db, requestsPath),
@@ -811,15 +1083,16 @@ export class FirebaseService {
         snapshot.forEach((d) => {
           list.push({ ...d.data(), id: d.id } as PrayerRequest);
         });
-        list.sort((a, b) => b.dateAdded.localeCompare(a.dateAdded));
+        list.sort((a, b) => b.dateAdded.localeCompare(a.dateAdded) || b.id.localeCompare(a.id));
         this.requests.set(list);
+        this.mirrorCollectionToLocalBackup('requests', partnershipId, list);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, requestsPath);
       }
     );
 
-    // 4. Messages (Listening Tracker)
+    // 4. Messages (Newest on top)
     const messagesPath = `partnerships/${partnershipId}/messages`;
     this.unsubMessages = onSnapshot(
       collection(db, messagesPath),
@@ -828,15 +1101,18 @@ export class FirebaseService {
         snapshot.forEach((d) => {
           list.push({ ...d.data(), id: d.id } as MessageListeningRecord);
         });
-        list.sort((a, b) => b.date.localeCompare(a.date));
+        list.sort(
+          (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+        );
         this.messages.set(list);
+        this.mirrorCollectionToLocalBackup('messages', partnershipId, list);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, messagesPath);
       }
     );
 
-    // 5. Authority Figures (Seed Targets)
+    // 5. Authority Figures (Newest on top)
     const authoritiesPath = `partnerships/${partnershipId}/authorities`;
     this.unsubAuthorities = onSnapshot(
       collection(db, authoritiesPath),
@@ -845,15 +1121,16 @@ export class FirebaseService {
         snapshot.forEach((d) => {
           list.push({ ...d.data(), id: d.id } as AuthorityFigureSeed);
         });
-        list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         this.authorities.set(list);
+        this.mirrorCollectionToLocalBackup('authorities', partnershipId, list);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, authoritiesPath);
       }
     );
 
-    // 6. Seeds Given
+    // 6. Seeds Given (Newest on top)
     const seedsPath = `partnerships/${partnershipId}/seeds`;
     this.unsubSeeds = onSnapshot(
       collection(db, seedsPath),
@@ -862,8 +1139,11 @@ export class FirebaseService {
         snapshot.forEach((d) => {
           list.push({ ...d.data(), id: d.id } as SeedGivingRecord);
         });
-        list.sort((a, b) => b.date.localeCompare(a.date));
+        list.sort(
+          (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
+        );
         this.seeds.set(list);
+        this.mirrorCollectionToLocalBackup('seeds', partnershipId, list);
       },
       (error) => {
         handleFirestoreError(error, OperationType.GET, seedsPath);
@@ -871,7 +1151,7 @@ export class FirebaseService {
     );
   }
 
-  private clearSubscriptions() {
+  private clearSubscriptions(clearSignals = true) {
     if (this.unsubPartnerships) this.unsubPartnerships();
     if (this.unsubSessions) this.unsubSessions();
     if (this.unsubTestimonies) this.unsubTestimonies();
@@ -886,17 +1166,19 @@ export class FirebaseService {
     this.unsubMessages = null;
     this.unsubAuthorities = null;
     this.unsubSeeds = null;
-    this.partnerships.set([]);
-    this.activePartnershipId.set(null);
-    this.sessions.set([]);
-    this.testimonies.set([]);
-    this.requests.set([]);
-    this.messages.set([]);
-    this.authorities.set([]);
-    this.seeds.set([]);
+    if (clearSignals) {
+      this.partnerships.set([]);
+      this.activePartnershipId.set(null);
+      this.sessions.set([]);
+      this.testimonies.set([]);
+      this.requests.set([]);
+      this.messages.set([]);
+      this.authorities.set([]);
+      this.seeds.set([]);
+    }
   }
 
-  // --- Partnership Operations ---
+  // --- Partnership Operations (0ms Optimistic + Background Dual Persistence) ---
 
   async createPartnership(
     name: string,
@@ -917,8 +1199,6 @@ export class FirebaseService {
     const currentUserEmail = (user.email || '').toLowerCase().trim();
     const currentUserName = user.displayName || currentUserEmail.split('@')[0] || 'Me';
 
-    // If individual private space, only include creator's email so nobody else can see it.
-    // If with partner, include partner emails so only those partners can see the circle they belong to.
     const rawEmails = circleType === 'individual'
       ? [currentUserEmail]
       : [currentUserEmail, ...partnerEmailsInput.map((e) => e.toLowerCase().trim())];
@@ -947,19 +1227,18 @@ export class FirebaseService {
       createdAt: new Date().toISOString(),
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('partnership', 'upsert', removeUndefinedFields(newPartnership) as unknown as Record<string, unknown>);
-      this.selectPartnership(pId);
-      return pId;
+    const sanitized = removeUndefinedFields(newPartnership);
+    // 0ms optimistic update & cloud-sync
+    this.pushToFallbackCloud('partnership', 'upsert', sanitized as unknown as Record<string, unknown>);
+    this.selectPartnership(pId);
+
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void setDoc(doc(db, 'partnerships', pId), sanitized).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, pPath)
+      );
     }
 
-    try {
-      await setDoc(doc(db, 'partnerships', pId), removeUndefinedFields(newPartnership));
-      this.selectPartnership(pId);
-      return pId;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, pPath);
-    }
+    return pId;
   }
 
   async addPartnerByEmail(partnershipId: string, email: string): Promise<void> {
@@ -977,19 +1256,19 @@ export class FirebaseService {
 
     const updatedEmails = [...p.memberEmails, normalizedEmail];
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('partnership', 'upsert', { ...p, circleType: 'partner', memberEmails: updatedEmails } as unknown as Record<string, unknown>);
-      return;
-    }
+    // 0ms optimistic update
+    this.pushToFallbackCloud(
+      'partnership',
+      'upsert',
+      { ...p, circleType: 'partner', memberEmails: updatedEmails } as unknown as Record<string, unknown>
+    );
 
-    const pPath = `partnerships/${partnershipId}`;
-    try {
-      await updateDoc(doc(db, 'partnerships', partnershipId), {
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const pPath = `partnerships/${partnershipId}`;
+      void updateDoc(doc(db, 'partnerships', partnershipId), {
         circleType: 'partner',
         memberEmails: updatedEmails,
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, pPath);
+      }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, pPath));
     }
   }
 
@@ -1004,38 +1283,34 @@ export class FirebaseService {
       periodEndDate: string;
     }
   ): Promise<void> {
-    if (this.isFallbackMode() || !auth.currentUser) {
-      const p = this.partnerships().find((x) => x.id === partnershipId);
-      if (p) {
-        await this.pushToFallbackCloud('partnership', 'upsert', {
-          ...p,
-          dailyTargetMinutes: targets.dailyMinutes,
-          weeklyTargetMinutes: targets.weeklyMinutes,
-          periodTitle: targets.periodTitle,
-          periodTargetMinutes: targets.periodTargetMinutes,
-          periodStartDate: targets.periodStartDate,
-          periodEndDate: targets.periodEndDate,
-        } as unknown as Record<string, unknown>);
-      }
-      return;
-    }
-
-    const pPath = `partnerships/${partnershipId}`;
-    try {
-      await updateDoc(doc(db, 'partnerships', partnershipId), {
+    const p = this.partnerships().find((x) => x.id === partnershipId);
+    if (p) {
+      // 0ms optimistic update
+      this.pushToFallbackCloud('partnership', 'upsert', {
+        ...p,
         dailyTargetMinutes: targets.dailyMinutes,
         weeklyTargetMinutes: targets.weeklyMinutes,
         periodTitle: targets.periodTitle,
         periodTargetMinutes: targets.periodTargetMinutes,
         periodStartDate: targets.periodStartDate,
         periodEndDate: targets.periodEndDate,
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, pPath);
+      } as unknown as Record<string, unknown>);
+    }
+
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const pPath = `partnerships/${partnershipId}`;
+      void updateDoc(doc(db, 'partnerships', partnershipId), {
+        dailyTargetMinutes: targets.dailyMinutes,
+        weeklyTargetMinutes: targets.weeklyMinutes,
+        periodTitle: targets.periodTitle,
+        periodTargetMinutes: targets.periodTargetMinutes,
+        periodStartDate: targets.periodStartDate,
+        periodEndDate: targets.periodEndDate,
+      }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, pPath));
     }
   }
 
-  // --- Session Operations ---
+  // --- Session Operations (0ms Optimistic) ---
 
   async addSession(
     sessionData: Omit<PrayerSession, 'id' | 'partnershipId' | 'authorUid' | 'authorName' | 'createdAt'>
@@ -1080,18 +1355,17 @@ export class FirebaseService {
       newSession['linkedTestimonyTitle'] = sessionData.linkedTestimonyTitle;
     }
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('sessions', 'upsert', removeUndefinedFields(newSession), pId);
-      return sId;
+    const sanitized = removeUndefinedFields(newSession);
+    // 0ms optimistic update
+    this.pushToFallbackCloud('sessions', 'upsert', sanitized, pId);
+
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void setDoc(doc(db, 'partnerships', pId, 'sessions', sId), sanitized).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, sPath)
+      );
     }
 
-    try {
-      await setDoc(doc(db, 'partnerships', pId, 'sessions', sId), removeUndefinedFields(newSession));
-      return sId;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, sPath);
-      throw err;
-    }
+    return sId;
   }
 
   async updateSession(session: PrayerSession): Promise<void> {
@@ -1118,20 +1392,18 @@ export class FirebaseService {
       linkedTestimonyTitle: session.linkedTestimonyTitle || null,
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud(
-        'sessions',
-        'upsert',
-        removeUndefinedFields({ ...session, ...updatedData }),
-        pId
-      );
-      return;
-    }
+    // 0ms optimistic update
+    this.pushToFallbackCloud(
+      'sessions',
+      'upsert',
+      removeUndefinedFields({ ...session, ...updatedData }),
+      pId
+    );
 
-    try {
-      await updateDoc(doc(db, 'partnerships', pId, 'sessions', session.id), removeUndefinedFields(updatedData));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, sPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void updateDoc(doc(db, 'partnerships', pId, 'sessions', session.id), removeUndefinedFields(updatedData)).catch(
+        (err) => handleFirestoreError(err, OperationType.UPDATE, sPath)
+      );
     }
   }
 
@@ -1139,20 +1411,18 @@ export class FirebaseService {
     const pId = this.activePartnershipId();
     if (!pId) return;
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('sessions', 'delete', { id: sessionId }, pId);
-      return;
-    }
+    // 0ms optimistic delete
+    this.pushToFallbackCloud('sessions', 'delete', { id: sessionId }, pId);
 
-    const sPath = `partnerships/${pId}/sessions/${sessionId}`;
-    try {
-      await deleteDoc(doc(db, 'partnerships', pId, 'sessions', sessionId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, sPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const sPath = `partnerships/${pId}/sessions/${sessionId}`;
+      void deleteDoc(doc(db, 'partnerships', pId, 'sessions', sessionId)).catch((err) =>
+        handleFirestoreError(err, OperationType.DELETE, sPath)
+      );
     }
   }
 
-  // --- Testimony Operations ---
+  // --- Testimony Operations (0ms Optimistic) ---
 
   async addTestimony(
     testimonyData: Omit<Testimony, 'id' | 'partnershipId' | 'authorUid' | 'authorName' | 'createdAt' | 'amensCount' | 'amenUids'>
@@ -1191,27 +1461,20 @@ export class FirebaseService {
       newTestimony['linkedSessionId'] = testimonyData.linkedSessionId;
     }
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('testimonies', 'upsert', removeUndefinedFields(newTestimony), pId);
-      if (testimonyData.linkedSessionId) {
-        await this.linkTestimonyToSession(testimonyData.linkedSessionId, tId, testimonyData.title);
-      }
-      return tId;
+    const sanitized = removeUndefinedFields(newTestimony);
+    // 0ms optimistic update
+    this.pushToFallbackCloud('testimonies', 'upsert', sanitized, pId);
+    if (testimonyData.linkedSessionId) {
+      void this.linkTestimonyToSession(testimonyData.linkedSessionId, tId, testimonyData.title);
     }
 
-    try {
-      await setDoc(doc(db, 'partnerships', pId, 'testimonies', tId), removeUndefinedFields(newTestimony));
-
-      // If linked to an existing prayer session, update the session with this testimony's ID and title
-      if (testimonyData.linkedSessionId) {
-        await this.linkTestimonyToSession(testimonyData.linkedSessionId, tId, testimonyData.title);
-      }
-
-      return tId;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, tPath);
-      throw err;
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void setDoc(doc(db, 'partnerships', pId, 'testimonies', tId), sanitized).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, tPath)
+      );
     }
+
+    return tId;
   }
 
   async updateTestimony(testimony: Testimony): Promise<void> {
@@ -1234,33 +1497,21 @@ export class FirebaseService {
       linkedSessionId: testimony.linkedSessionId || null,
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud(
-        'testimonies',
-        'upsert',
-        removeUndefinedFields({ ...testimony, ...updatedData }),
-        pId
-      );
-      if (testimony.linkedSessionId) {
-        await this.linkTestimonyToSession(testimony.linkedSessionId, testimony.id, testimony.title);
-      }
-      return;
+    // 0ms optimistic update
+    this.pushToFallbackCloud(
+      'testimonies',
+      'upsert',
+      removeUndefinedFields({ ...testimony, ...updatedData }),
+      pId
+    );
+    if (testimony.linkedSessionId) {
+      void this.linkTestimonyToSession(testimony.linkedSessionId, testimony.id, testimony.title);
     }
 
-    try {
-      await updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimony.id), removeUndefinedFields(updatedData));
-
-      // If linked to session, also update the session's cached title
-      if (testimony.linkedSessionId) {
-        await updateDoc(doc(db, 'partnerships', pId, 'sessions', testimony.linkedSessionId), {
-          linkedTestimonyId: testimony.id,
-          linkedTestimonyTitle: testimony.title,
-        }).catch(() => {
-          // ignore non-critical session sync
-        });
-      }
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, tPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimony.id), removeUndefinedFields(updatedData)).catch(
+        (err) => handleFirestoreError(err, OperationType.UPDATE, tPath)
+      );
     }
   }
 
@@ -1272,40 +1523,33 @@ export class FirebaseService {
     const pId = this.activePartnershipId();
     if (!pId) return;
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      const existingSession = this.sessions().find((s) => s.id === sessionId);
-      if (existingSession) {
-        await this.pushToFallbackCloud(
-          'sessions',
-          'upsert',
-          { ...existingSession, linkedTestimonyId: testimonyId, linkedTestimonyTitle: testimonyTitle } as unknown as Record<string, unknown>,
-          pId
-        );
-      }
-      const existingTestimony = this.testimonies().find((t) => t.id === testimonyId);
-      if (existingTestimony) {
-        await this.pushToFallbackCloud(
-          'testimonies',
-          'upsert',
-          { ...existingTestimony, linkedSessionId: sessionId } as unknown as Record<string, unknown>,
-          pId
-        );
-      }
-      return;
+    const existingSession = this.sessions().find((s) => s.id === sessionId);
+    if (existingSession) {
+      this.pushToFallbackCloud(
+        'sessions',
+        'upsert',
+        { ...existingSession, linkedTestimonyId: testimonyId, linkedTestimonyTitle: testimonyTitle } as unknown as Record<string, unknown>,
+        pId
+      );
+    }
+    const existingTestimony = this.testimonies().find((t) => t.id === testimonyId);
+    if (existingTestimony) {
+      this.pushToFallbackCloud(
+        'testimonies',
+        'upsert',
+        { ...existingTestimony, linkedSessionId: sessionId } as unknown as Record<string, unknown>,
+        pId
+      );
     }
 
-    try {
-      // 1. Update session with testimony info
-      await updateDoc(doc(db, 'partnerships', pId, 'sessions', sessionId), {
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void updateDoc(doc(db, 'partnerships', pId, 'sessions', sessionId), {
         linkedTestimonyId: testimonyId,
         linkedTestimonyTitle: testimonyTitle,
-      });
-      // 2. Update testimony with session link
-      await updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
+      }).catch(() => {});
+      void updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
         linkedSessionId: sessionId,
-      });
-    } catch (err) {
-      console.warn('Could not link session and testimony:', err);
+      }).catch(() => {});
     }
   }
 
@@ -1320,24 +1564,20 @@ export class FirebaseService {
     const uids = t.amenUids || [];
     if (uids.includes(user.uid)) return; // already praised
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud(
-        'testimonies',
-        'upsert',
-        { ...t, amensCount: (t.amensCount || 0) + 1, amenUids: [...uids, user.uid] } as unknown as Record<string, unknown>,
-        pId
-      );
-      return;
-    }
+    // 0ms optimistic update
+    this.pushToFallbackCloud(
+      'testimonies',
+      'upsert',
+      { ...t, amensCount: (t.amensCount || 0) + 1, amenUids: [...uids, user.uid] } as unknown as Record<string, unknown>,
+      pId
+    );
 
-    const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
-    try {
-      await updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
+      void updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
         amensCount: (t.amensCount || 0) + 1,
         amenUids: [...uids, user.uid],
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, tPath);
+      }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, tPath));
     }
   }
 
@@ -1345,20 +1585,18 @@ export class FirebaseService {
     const pId = this.activePartnershipId();
     if (!pId) return;
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('testimonies', 'delete', { id: testimonyId }, pId);
-      return;
-    }
+    // 0ms optimistic delete
+    this.pushToFallbackCloud('testimonies', 'delete', { id: testimonyId }, pId);
 
-    const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
-    try {
-      await deleteDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, tPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
+      void deleteDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId)).catch((err) =>
+        handleFirestoreError(err, OperationType.DELETE, tPath)
+      );
     }
   }
 
-  // --- Request Operations ---
+  // --- Request Operations (0ms Optimistic) ---
 
   async addRequest(
     requestData: Omit<PrayerRequest, 'id' | 'partnershipId' | 'authorUid' | 'authorName' | 'createdAt'>
@@ -1393,15 +1631,14 @@ export class FirebaseService {
       newRequest['answeredTestimonyId'] = requestData.answeredTestimonyId;
     }
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('requests', 'upsert', removeUndefinedFields(newRequest), pId);
-      return;
-    }
+    const sanitized = removeUndefinedFields(newRequest);
+    // 0ms optimistic update
+    this.pushToFallbackCloud('requests', 'upsert', sanitized, pId);
 
-    try {
-      await setDoc(doc(db, 'partnerships', pId, 'requests', rId), removeUndefinedFields(newRequest));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, rPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void setDoc(doc(db, 'partnerships', pId, 'requests', rId), sanitized).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, rPath)
+      );
     }
   }
 
@@ -1424,20 +1661,18 @@ export class FirebaseService {
       answeredTestimonyId: request.answeredTestimonyId || null,
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud(
-        'requests',
-        'upsert',
-        removeUndefinedFields({ ...request, ...updatedData }),
-        pId
-      );
-      return;
-    }
+    // 0ms optimistic update
+    this.pushToFallbackCloud(
+      'requests',
+      'upsert',
+      removeUndefinedFields({ ...request, ...updatedData }),
+      pId
+    );
 
-    try {
-      await updateDoc(doc(db, 'partnerships', pId, 'requests', request.id), removeUndefinedFields(updatedData));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, rPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void updateDoc(doc(db, 'partnerships', pId, 'requests', request.id), removeUndefinedFields(updatedData)).catch(
+        (err) => handleFirestoreError(err, OperationType.UPDATE, rPath)
+      );
     }
   }
 
@@ -1450,26 +1685,22 @@ export class FirebaseService {
     if (!pId) return;
     const nextStatus = currentStatus === 'answered' ? 'active' : 'answered';
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      const existing = this.requests().find((r) => r.id === requestId);
-      if (existing) {
-        await this.pushToFallbackCloud(
-          'requests',
-          'upsert',
-          { ...existing, status: nextStatus } as unknown as Record<string, unknown>,
-          pId
-        );
-      }
-      return;
+    const existing = this.requests().find((r) => r.id === requestId);
+    if (existing) {
+      // 0ms optimistic update
+      this.pushToFallbackCloud(
+        'requests',
+        'upsert',
+        { ...existing, status: nextStatus } as unknown as Record<string, unknown>,
+        pId
+      );
     }
 
-    const rPath = `partnerships/${pId}/requests/${requestId}`;
-    try {
-      await updateDoc(doc(db, 'partnerships', pId, 'requests', requestId), {
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const rPath = `partnerships/${pId}/requests/${requestId}`;
+      void updateDoc(doc(db, 'partnerships', pId, 'requests', requestId), {
         status: nextStatus,
-      });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, rPath);
+      }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, rPath));
     }
   }
 
@@ -1477,20 +1708,18 @@ export class FirebaseService {
     const pId = this.activePartnershipId();
     if (!pId) return;
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('requests', 'delete', { id: requestId }, pId);
-      return;
-    }
+    // 0ms optimistic delete
+    this.pushToFallbackCloud('requests', 'delete', { id: requestId }, pId);
 
-    const rPath = `partnerships/${pId}/requests/${requestId}`;
-    try {
-      await deleteDoc(doc(db, 'partnerships', pId, 'requests', requestId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, rPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const rPath = `partnerships/${pId}/requests/${requestId}`;
+      void deleteDoc(doc(db, 'partnerships', pId, 'requests', requestId)).catch((err) =>
+        handleFirestoreError(err, OperationType.DELETE, rPath)
+      );
     }
   }
 
-  // --- Message Listening Operations ---
+  // --- Message Listening Operations (0ms Optimistic) ---
 
   async addMessageRecord(
     data: Omit<MessageListeningRecord, 'id' | 'partnershipId' | 'authorUid' | 'authorName' | 'createdAt'>
@@ -1519,18 +1748,17 @@ export class FirebaseService {
       createdAt: new Date().toISOString(),
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('messages', 'upsert', removeUndefinedFields(newMsg), pId);
-      return mId;
+    const sanitized = removeUndefinedFields(newMsg);
+    // 0ms optimistic update
+    this.pushToFallbackCloud('messages', 'upsert', sanitized, pId);
+
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void setDoc(doc(db, 'partnerships', pId, 'messages', mId), sanitized).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, mPath)
+      );
     }
 
-    try {
-      await setDoc(doc(db, 'partnerships', pId, 'messages', mId), removeUndefinedFields(newMsg));
-      return mId;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, mPath);
-      throw err;
-    }
+    return mId;
   }
 
   async updateMessageRecord(record: MessageListeningRecord): Promise<void> {
@@ -1550,25 +1778,23 @@ export class FirebaseService {
       wasTogether: !!record.wasTogether,
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud(
-        'messages',
-        'upsert',
-        removeUndefinedFields({ ...record, ...updatedData }),
-        pId
-      );
-      return;
-    }
+    // 0ms optimistic update
+    this.pushToFallbackCloud(
+      'messages',
+      'upsert',
+      removeUndefinedFields({ ...record, ...updatedData }),
+      pId
+    );
 
-    try {
-      await updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, mPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData)).catch(
+        (err) => handleFirestoreError(err, OperationType.UPDATE, mPath)
+      );
     }
   }
 
   /**
-   * Adds additional listening time or repeats the initial recorded duration for an existing message.
+   * Adds additional listening time or repeats the initial recorded duration for an existing message in 0ms.
    */
   async addMoreTimeToMessage(record: MessageListeningRecord, additionalMinutes: number): Promise<void> {
     const pId = this.activePartnershipId();
@@ -1587,20 +1813,18 @@ export class FirebaseService {
       date: this.getTodayDateString(),
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud(
-        'messages',
-        'upsert',
-        removeUndefinedFields({ ...record, ...updatedData }),
-        pId
-      );
-      return;
-    }
+    // 0ms optimistic update
+    this.pushToFallbackCloud(
+      'messages',
+      'upsert',
+      removeUndefinedFields({ ...record, ...updatedData }),
+      pId
+    );
 
-    try {
-      await updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, mPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData)).catch(
+        (err) => handleFirestoreError(err, OperationType.UPDATE, mPath)
+      );
     }
   }
 
@@ -1608,20 +1832,18 @@ export class FirebaseService {
     const pId = this.activePartnershipId();
     if (!pId) return;
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('messages', 'delete', { id: messageId }, pId);
-      return;
-    }
+    // 0ms optimistic delete
+    this.pushToFallbackCloud('messages', 'delete', { id: messageId }, pId);
 
-    const mPath = `partnerships/${pId}/messages/${messageId}`;
-    try {
-      await deleteDoc(doc(db, 'partnerships', pId, 'messages', messageId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, mPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const mPath = `partnerships/${pId}/messages/${messageId}`;
+      void deleteDoc(doc(db, 'partnerships', pId, 'messages', messageId)).catch((err) =>
+        handleFirestoreError(err, OperationType.DELETE, mPath)
+      );
     }
   }
 
-  // --- Authority Figure & Seed Giving Operations ---
+  // --- Authority Figure & Seed Giving Operations (0ms Optimistic) ---
 
   async addAuthorityFigure(
     data: Omit<AuthorityFigureSeed, 'id' | 'partnershipId' | 'authorUid' | 'authorName' | 'createdAt'>
@@ -1647,18 +1869,17 @@ export class FirebaseService {
       createdAt: new Date().toISOString(),
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('authorities', 'upsert', removeUndefinedFields(newAuthority), pId);
-      return aId;
+    const sanitized = removeUndefinedFields(newAuthority);
+    // 0ms optimistic update
+    this.pushToFallbackCloud('authorities', 'upsert', sanitized, pId);
+
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void setDoc(doc(db, 'partnerships', pId, 'authorities', aId), sanitized).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, aPath)
+      );
     }
 
-    try {
-      await setDoc(doc(db, 'partnerships', pId, 'authorities', aId), removeUndefinedFields(newAuthority));
-      return aId;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, aPath);
-      throw err;
-    }
+    return aId;
   }
 
   async updateAuthorityFigure(authority: AuthorityFigureSeed): Promise<void> {
@@ -1675,20 +1896,18 @@ export class FirebaseService {
       mode: authority.mode || 'individual',
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud(
-        'authorities',
-        'upsert',
-        removeUndefinedFields({ ...authority, ...updatedData }),
-        pId
-      );
-      return;
-    }
+    // 0ms optimistic update
+    this.pushToFallbackCloud(
+      'authorities',
+      'upsert',
+      removeUndefinedFields({ ...authority, ...updatedData }),
+      pId
+    );
 
-    try {
-      await updateDoc(doc(db, 'partnerships', pId, 'authorities', authority.id), removeUndefinedFields(updatedData));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, aPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void updateDoc(doc(db, 'partnerships', pId, 'authorities', authority.id), removeUndefinedFields(updatedData)).catch(
+        (err) => handleFirestoreError(err, OperationType.UPDATE, aPath)
+      );
     }
   }
 
@@ -1696,16 +1915,39 @@ export class FirebaseService {
     const pId = this.activePartnershipId();
     if (!pId) return;
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('authorities', 'delete', { id: authorityId }, pId);
-      return;
+    const matchingSeeds = this.seeds().filter((s) => s.authorityId === authorityId);
+
+    // 0ms optimistic cascade delete (deletes authority figure and all linked seed records immediately)
+    this.pushToFallbackCloud('authorities', 'delete', { id: authorityId }, pId);
+    for (const seed of matchingSeeds) {
+      this.pushToFallbackCloud('seeds', 'delete', { id: seed.id }, pId);
     }
 
-    const aPath = `partnerships/${pId}/authorities/${authorityId}`;
-    try {
-      await deleteDoc(doc(db, 'partnerships', pId, 'authorities', authorityId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, aPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const aPath = `partnerships/${pId}/authorities/${authorityId}`;
+      void (async () => {
+        try {
+          const seedIdsToDelete = new Set<string>(matchingSeeds.map((s) => s.id));
+          try {
+            const seedsQuery = query(
+              collection(db, 'partnerships', pId, 'seeds'),
+              where('authorityId', '==', authorityId)
+            );
+            const snap = await getDocs(seedsQuery);
+            snap.forEach((docSnap) => seedIdsToDelete.add(docSnap.id));
+          } catch {
+            // Proceed with known matchingSeeds
+          }
+          await Promise.all([
+            deleteDoc(doc(db, 'partnerships', pId, 'authorities', authorityId)),
+            ...Array.from(seedIdsToDelete).map((seedId) =>
+              deleteDoc(doc(db, 'partnerships', pId, 'seeds', seedId))
+            ),
+          ]);
+        } catch (err) {
+          handleFirestoreError(err, OperationType.DELETE, aPath);
+        }
+      })();
     }
   }
 
@@ -1733,34 +1975,31 @@ export class FirebaseService {
       createdAt: new Date().toISOString(),
     };
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('seeds', 'upsert', removeUndefinedFields(newSeed), pId);
-      return seedId;
+    const sanitized = removeUndefinedFields(newSeed);
+    // 0ms optimistic update
+    this.pushToFallbackCloud('seeds', 'upsert', sanitized, pId);
+
+    if (!this.isFallbackMode() && auth.currentUser) {
+      void setDoc(doc(db, 'partnerships', pId, 'seeds', seedId), sanitized).catch((err) =>
+        handleFirestoreError(err, OperationType.WRITE, seedPath)
+      );
     }
 
-    try {
-      await setDoc(doc(db, 'partnerships', pId, 'seeds', seedId), removeUndefinedFields(newSeed));
-      return seedId;
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, seedPath);
-      throw err;
-    }
+    return seedId;
   }
 
   async deleteSeedRecord(seedId: string): Promise<void> {
     const pId = this.activePartnershipId();
     if (!pId) return;
 
-    if (this.isFallbackMode() || !auth.currentUser) {
-      await this.pushToFallbackCloud('seeds', 'delete', { id: seedId }, pId);
-      return;
-    }
+    // 0ms optimistic delete
+    this.pushToFallbackCloud('seeds', 'delete', { id: seedId }, pId);
 
-    const seedPath = `partnerships/${pId}/seeds/${seedId}`;
-    try {
-      await deleteDoc(doc(db, 'partnerships', pId, 'seeds', seedId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, seedPath);
+    if (!this.isFallbackMode() && auth.currentUser) {
+      const seedPath = `partnerships/${pId}/seeds/${seedId}`;
+      void deleteDoc(doc(db, 'partnerships', pId, 'seeds', seedId)).catch((err) =>
+        handleFirestoreError(err, OperationType.DELETE, seedPath)
+      );
     }
   }
 
@@ -1844,10 +2083,14 @@ export class FirebaseService {
       byCurrencyMap.set(curr, entry);
     }
 
+    let validSeedsCount = 0;
     for (const s of seeds) {
-      const amt = Number(s.amount) || 0;
       const parentAuth = authorities.find((a) => a.id === s.authorityId);
-      const curr = (parentAuth?.currency || 'GHS').toUpperCase();
+      // Ignore any orphaned seed whose authority target was deleted
+      if (!parentAuth) continue;
+      validSeedsCount++;
+      const amt = Number(s.amount) || 0;
+      const curr = (parentAuth.currency || 'GHS').toUpperCase();
       if (curr !== 'GHS') hasForeignCurrency = true;
       const rate = curr === 'GHS' ? 1 : rates[curr] || 1;
       const amtGhs = amt * rate;
@@ -1891,7 +2134,7 @@ export class FirebaseService {
       progressPct,
       hasForeignCurrency,
       authoritiesCount: authorities.length,
-      seedsCount: seeds.length,
+      seedsCount: validSeedsCount,
       byCurrency,
     };
   });
@@ -2114,10 +2357,11 @@ export class FirebaseService {
     const bundles: DailyPrayerBundle[] = [];
 
     for (const dateStr of sortedDates) {
+      // Sort day sessions newest on top
       const daySessions = (dateMap.get(dateStr) || []).sort((a, b) => {
-        const timeA = a.startTime || a.createdAt;
-        const timeB = b.startTime || b.createdAt;
-        return timeA.localeCompare(timeB);
+        const timeA = a.startTime || a.createdAt || '';
+        const timeB = b.startTime || b.createdAt || '';
+        return timeB.localeCompare(timeA);
       });
 
       const totalMinutes = daySessions.reduce((acc, s) => acc + s.durationMinutes, 0);
@@ -2208,17 +2452,31 @@ export class FirebaseService {
     };
   });
 
-  // Floating-point & Time formatting utilities (strictly 1 decimal point for floats)
+  // Floating-point & Figure formatting utilities (commas for thousands + 1 decimal point for floats)
   formatOneDecimal(val: number): string {
     const num = Number(val);
     if (!Number.isFinite(num)) return '0.0';
-    return (Math.round(num * 10) / 10).toFixed(1);
+    const rounded = Math.round(num * 10) / 10;
+    return rounded.toLocaleString('en-US', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+  }
+
+  formatInteger(val: number): string {
+    const num = Number(val);
+    if (!Number.isFinite(num)) return '0';
+    return Math.round(num).toLocaleString('en-US');
   }
 
   formatHours(mins: number): string {
     const num = Number(mins);
     if (!Number.isFinite(num) || num <= 0) return '0.0';
-    return (Math.round((num / 60) * 10) / 10).toFixed(1);
+    const rounded = Math.round((num / 60) * 10) / 10;
+    return rounded.toLocaleString('en-US', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
   }
 
   formatPercentage(value: number, target: number): string {
@@ -2226,19 +2484,26 @@ export class FirebaseService {
     const t = Number(target) || 0;
     if (t <= 0) return '0.0';
     const pct = Math.min(100, Math.max(0, (v / t) * 100));
-    return (Math.round(pct * 10) / 10).toFixed(1);
+    const rounded = Math.round(pct * 10) / 10;
+    return rounded.toLocaleString('en-US', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
   }
 
   formatMinutes(mins: number): string {
     const safeMins = Math.round((Number(mins) || 0) * 10) / 10;
     if (safeMins < 60) {
-      return Number.isInteger(safeMins) ? `${safeMins}m` : `${safeMins.toFixed(1)}m`;
+      return Number.isInteger(safeMins)
+        ? `${safeMins.toLocaleString('en-US')}m`
+        : `${safeMins.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}m`;
     }
     const h = Math.floor(safeMins / 60);
     const m = Math.round((safeMins % 60) * 10) / 10;
-    if (m === 0) return `${h}h`;
+    const hStr = h.toLocaleString('en-US');
+    if (m === 0) return `${hStr}h`;
     const mStr = Number.isInteger(m) ? `${m}m` : `${m.toFixed(1)}m`;
-    return `${h}h ${mStr}`;
+    return `${hStr}h ${mStr}`;
   }
 
   getTodayDateString(): string {

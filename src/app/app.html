@@ -938,6 +938,135 @@
               </div>
             </div>
 
+            <!-- Recent Records on Dashboard (Newest on Top + Filter & Sort) -->
+            <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/80 pb-3">
+                <div>
+                  <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
+                    Activity Feed
+                  </span>
+                  <h3 class="text-base font-semibold text-stone-100">
+                    Recent Records ({{ firebaseService.formatInteger(dashboardRecords().length) }})
+                  </h3>
+                </div>
+                <span class="text-[11px] font-mono text-stone-400">
+                  {{ dashboardRecordSort() === 'newest' ? 'Newest on top' : 'Oldest on top' }}
+                </span>
+              </div>
+
+              <!-- Filter & Sort Bar for Dashboard Records -->
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-stone-950 border border-stone-800">
+                <div>
+                  <label for="dashSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
+                  <input
+                    id="dashSearch"
+                    type="text"
+                    [value]="dashboardRecordSearch()"
+                    (input)="dashboardRecordSearch.set($any($event.target).value)"
+                    placeholder="Search records..."
+                    class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label for="dashType" class="block text-[11px] font-medium text-stone-400 mb-1">Filter Type</label>
+                  <select
+                    id="dashType"
+                    [value]="dashboardRecordType()"
+                    (change)="dashboardRecordType.set($any($event.target).value)"
+                    class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="all">All Records</option>
+                    <option value="prayer">Prayer Logs</option>
+                    <option value="message">Messages</option>
+                    <option value="seed">Seeds (GHS)</option>
+                    <option value="testimony">Testimonies</option>
+                    <option value="petition">Petitions</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="dashSort" class="block text-[11px] font-medium text-stone-400 mb-1">Sort Order</label>
+                  <select
+                    id="dashSort"
+                    [value]="dashboardRecordSort()"
+                    (change)="dashboardRecordSort.set($any($event.target).value)"
+                    class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Records List -->
+              @if (dashboardRecords().length === 0) {
+                <div class="text-center py-8 text-xs text-stone-500">
+                  No matching records found.
+                </div>
+              } @else {
+                <div class="space-y-2 max-h-96 overflow-y-auto pr-1">
+                  @for (rec of dashboardRecords(); track rec.type + '-' + rec.id) {
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-stone-950 border border-stone-800/80 hover:border-stone-700 transition-all text-xs">
+                      <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                          <mat-icon style="font-size: 16px;">{{ rec.icon }}</mat-icon>
+                        </div>
+                        <div class="min-w-0 space-y-0.5">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-stone-800 text-stone-300">
+                              {{ rec.typeLabel }}
+                            </span>
+                            <span class="font-semibold text-stone-100 truncate">{{ rec.title }}</span>
+                            <span class="font-mono font-bold text-amber-400 tabular-nums">{{ rec.metricPrimary }}</span>
+                            @if (rec.metricSecondary) {
+                              <span class="text-[10px] px-1.5 py-0.5 rounded bg-stone-900 border border-stone-800 text-stone-400">
+                                {{ rec.metricSecondary }}
+                              </span>
+                            }
+                          </div>
+                          <p class="text-[11px] text-stone-400 line-clamp-1">{{ rec.subtitle }}</p>
+                          <div class="text-[10px] font-mono text-stone-500">
+                            {{ rec.date }} · {{ rec.authorName }}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          (click)="setTab(rec.tab)"
+                          class="py-1 px-2.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 text-[11px] font-medium flex items-center gap-1"
+                        >
+                          <mat-icon style="font-size: 13px;">open_in_new</mat-icon>
+                          <span>View</span>
+                        </button>
+                        @if (rec.type === 'seed' && rec.authorityId) {
+                          <button
+                            type="button"
+                            (click)="confirmDelete('authority', rec.authorityId)"
+                            class="py-1 px-2 rounded-lg bg-stone-900 hover:bg-red-950/60 text-stone-400 hover:text-red-300 border border-stone-800 text-[11px] flex items-center gap-1"
+                            title="Delete Seed Target and all its saved seeds"
+                          >
+                            <mat-icon style="font-size: 13px;">delete_sweep</mat-icon>
+                            <span>Delete Target</span>
+                          </button>
+                        }
+                        <button
+                          type="button"
+                          (click)="confirmDelete(rec.type === 'prayer' ? 'session' : (rec.type === 'petition' ? 'request' : rec.type), rec.id)"
+                          class="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-900"
+                          title="Delete Record"
+                        >
+                          <mat-icon style="font-size: 15px;">delete</mat-icon>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+
             <!-- Circle Visibility & Accountability Roster -->
             <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/80 pb-3">
@@ -1079,8 +1208,8 @@
             </div>
           </div>
 
-          <!-- Filters Bar -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
+          <!-- Filters & Sort Bar -->
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
             <div>
               <label for="jSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
               <input
@@ -1122,6 +1251,20 @@
                 }
               </select>
             </div>
+
+            <div>
+              <label for="jSort" class="block text-[11px] font-medium text-stone-400 mb-1">Sort</label>
+              <select
+                id="jSort"
+                [value]="journalSort()"
+                (change)="journalSort.set($any($event.target).value)"
+                class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="longest">Longest Duration</option>
+              </select>
+            </div>
           </div>
 
           <!-- VIEW MODE 1: DAILY PRAYER BUNDLES (Grouped by day) -->
@@ -1160,12 +1303,12 @@
                           </div>
                           <div class="flex items-center gap-2 text-xs mt-0.5">
                             <span class="text-stone-400">
-                              {{ bundle.sessions.length }} {{ bundle.sessions.length === 1 ? 'session' : 'sessions' }}
+                              {{ firebaseService.formatInteger(bundle.sessions.length) }} {{ bundle.sessions.length === 1 ? 'session' : 'sessions' }}
                             </span>
                             @if (bundle.testimoniesCount > 0) {
                               <span class="text-amber-400 font-medium flex items-center gap-0.5">
                                 <mat-icon style="font-size: 14px;">celebration</mat-icon>
-                                {{ bundle.testimoniesCount }} {{ bundle.testimoniesCount === 1 ? 'testimony' : 'testimonies' }}
+                                {{ firebaseService.formatInteger(bundle.testimoniesCount) }} {{ bundle.testimoniesCount === 1 ? 'testimony' : 'testimonies' }}
                               </span>
                             }
                           </div>
@@ -1186,7 +1329,7 @@
                           </mat-icon>
                           <span class="font-mono">{{ firebaseService.formatMinutes(bundle.totalMinutes) }}</span>
                           <span class="text-[11px] opacity-80">
-                            / {{ bundle.dailyTargetMinutes }}m
+                            / {{ firebaseService.formatInteger(bundle.dailyTargetMinutes) }}m
                           </span>
                         </div>
 
@@ -1307,7 +1450,7 @@
                         <div class="mt-4 pt-4 border-t border-stone-800/80 space-y-2">
                           <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                             <mat-icon style="font-size: 16px;">auto_awesome</mat-icon>
-                            <span>Testimonies ({{ bundle.testimonies.length }})</span>
+                            <span>Testimonies ({{ firebaseService.formatInteger(bundle.testimonies.length) }})</span>
                           </span>
 
                           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1329,7 +1472,7 @@
                                 </p>
                                 <div class="flex items-center justify-between text-[11px] text-stone-500 pt-1">
                                   <span>{{ t.authorName }}</span>
-                                  <span class="text-amber-400 font-semibold">Amen ({{ t.amensCount }})</span>
+                                  <span class="text-amber-400 font-semibold">Amen ({{ firebaseService.formatInteger(t.amensCount) }})</span>
                                 </div>
                               </div>
                             }
@@ -1458,8 +1601,8 @@
             </button>
           </div>
 
-          <!-- Search & Filter -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
+          <!-- Search, Filter & Sort -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
             <div>
               <label for="tSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
               <input
@@ -1484,6 +1627,20 @@
                 @for (c of categories; track c.name) {
                   <option [value]="c.name">{{ c.name }}</option>
                 }
+              </select>
+            </div>
+
+            <div>
+              <label for="tSort" class="block text-[11px] font-medium text-stone-400 mb-1">Sort</label>
+              <select
+                id="tSort"
+                [value]="testimonySort()"
+                (change)="testimonySort.set($any($event.target).value)"
+                class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+              >
+                <option value="newest">Newest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="mostAmens">Most Amens</option>
               </select>
             </div>
           </div>
@@ -1577,7 +1734,7 @@
                       class="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-amber-500/20 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-all active:scale-95"
                     >
                       <mat-icon style="font-size: 16px;">celebration</mat-icon>
-                      <span>Amen ({{ t.amensCount }})</span>
+                      <span>Amen ({{ firebaseService.formatInteger(t.amensCount) }})</span>
                     </button>
 
                     <button
@@ -1705,7 +1862,7 @@
                     Petitions
                   </span>
                   <h3 class="text-base font-semibold text-stone-100">
-                    Prayer Requests
+                    Prayer Requests ({{ firebaseService.formatInteger(displayedRequests().length) }})
                   </h3>
                 </div>
 
@@ -1719,14 +1876,59 @@
                 </button>
               </div>
 
+              <!-- Filter & Sort Bar for Petitions -->
+              @if (firebaseService.requests().length > 0) {
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-stone-950 border border-stone-800">
+                  <div>
+                    <label for="reqSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
+                    <input
+                      id="reqSearch"
+                      type="text"
+                      [value]="requestSearch()"
+                      (input)="requestSearch.set($any($event.target).value)"
+                      placeholder="Search petitions..."
+                      class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label for="reqStatus" class="block text-[11px] font-medium text-stone-400 mb-1">Status</label>
+                    <select
+                      id="reqStatus"
+                      [value]="requestStatusFilter()"
+                      (change)="requestStatusFilter.set($any($event.target).value)"
+                      class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="all">All Statuses</option>
+                      <option value="active">Active</option>
+                      <option value="waiting">Waiting</option>
+                      <option value="answered">Answered</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label for="reqSort" class="block text-[11px] font-medium text-stone-400 mb-1">Sort</label>
+                    <select
+                      id="reqSort"
+                      [value]="requestSort()"
+                      (change)="requestSort.set($any($event.target).value)"
+                      class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                    >
+                      <option value="newest">Newest First</option>
+                      <option value="oldest">Oldest First</option>
+                    </select>
+                  </div>
+                </div>
+              }
+
               <!-- Request items -->
               <div class="space-y-3 pt-2">
-                @if (firebaseService.requests().length === 0) {
+                @if (displayedRequests().length === 0) {
                   <div class="text-center py-6 text-xs text-stone-500">
-                    No prayer requests yet.
+                    {{ firebaseService.requests().length === 0 ? 'No prayer requests yet.' : 'No matching petitions.' }}
                   </div>
                 } @else {
-                  @for (req of firebaseService.requests(); track req.id) {
+                  @for (req of displayedRequests(); track req.id) {
                     <div class="p-4 rounded-xl bg-stone-950 border border-stone-800 space-y-2 hover:border-stone-700 transition-colors">
                       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                         <div class="flex items-center gap-2">

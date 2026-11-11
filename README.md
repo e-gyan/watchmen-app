@@ -159,6 +159,32 @@ To enable 1-click Google Popup/Redirect login on Render:
 
 ---
 
+## 🏗️ System Architecture & Components
+
+### High-Level Architecture
+- **Frontend**: Angular 21+ (Zoneless, Signals, Reactive Forms, Tailwind CSS v4) with OnPush change detection and 0ms optimistic state hydration.
+- **Backend / SSR**: Express + `@angular/ssr` (`src/server.ts`) providing server-side rendering, continuous real-time market currency rate polling + Server-Sent Events (`GET /api/fx-stream` and `GET /api/fx-rates`) for live conversion to **GHS**, real-time database broadcast (`GET /api/cloud-stream` and `POST /api/cloud-sync`), and `/api/prayer-assist` Gemini integration.
+- **Database & Auth**: Dual-persistence architecture combining 0ms synchronous local cache (`localStorage`), real-time Express cloud sync (`/api/cloud-sync`), and Firebase Authentication + Cloud Firestore (`partnerships`, `sessions`, `messages`, `authorities`, `seeds`, `testimonies`, `requests`).
+
+### Core Components & Services
+- `src/app/app.ts` & `src/app/app.html`: Shell, collapsible header menu, Dashboard overview (Menu Totals in GHS, 5-day & 2-week charts, Recent Records feed with search/filter/sort), Journal, Testimonies, and Covenant Petitions.
+- `src/app/components/messages-tracker.ts`: Word intake tracker with initial duration, 1-click repeat (`+initial time`), custom `+ Add Time`, and filter/sort controls.
+- `src/app/components/seed-tracker.ts`: Annual Seed Altar tracker with live FX conversion to **GHS**, cascading deletion of saved seeds when a seed target is removed, and filter/sort controls.
+- `src/app/services/firebase.service.ts`: 0ms synchronous auth/read hydration, 0ms optimistic CRUD mutations with non-blocking background persistence to `/api/cloud-sync` and Firestore, real-time `EventSource('/api/fx-stream')` market rate listener, real-time `EventSource('/api/cloud-stream')` database listener, cascading seed deletion, newest-first record ordering, and comma-formatted number utilities (`1,000.0`, `1,250`).
+- `src/app/services/theme.service.ts`: Automatic theme scheduler (Light mode `6:45 AM – 6:45 PM`, Dark mode `6:45 PM – 6:45 AM`) with manual override.
+
+---
+
+## 📦 GitHub File Change Summary (Commit Briefs)
+
+- **`src/server.ts`**: Added background real-time market FX listener (`fetchLatestMarketFxRates`) polling multi-provider live exchange feeds every 30s, `GET /api/fx-stream` Server-Sent Events endpoint pushing live currency rate changes to connected clients in real time, `GET /api/cloud-stream` SSE endpoint broadcasting database updates immediately on `POST /api/cloud-sync`, and cascading deletion of associated seed records when an authority seed target is removed.
+- **`src/app/services/firebase.service.ts`**: Implemented 0ms synchronous startup and login hydration (`hydrateFromLocalCacheSync`, `loginWithPartnerEmail`, `saveCachedAuthUser`), 0ms optimistic CRUD mutations (`pushToFallbackCloud` + non-blocking Firestore writes) across all collections (`partnerships`, `sessions`, `testimonies`, `requests`, `messages`, `authorities`, `seeds`), real-time SSE listeners (`connectFxStream`, `connectCloudStream`) for instant market FX rate and database synchronization, cascading seed deletion, newest-on-top ordering, and comma-formatted figures.
+- **`src/app/components/seed-tracker.ts`**: Added search, mode, currency filters, and sort controls (`newest`, `oldest`, `highestGiven`, `highestTarget`); sorted seed history newest on top; formatted figures with commas.
+- **`src/app/components/messages-tracker.ts`**: Added search, mode filter, and sort controls (`newest`, `oldest`, `mostTime`, `mostListened`) with newest on top by default and comma-formatted figures.
+- **`src/app/app.ts` & `src/app/app.html`**: Added Dashboard Recent Records feed (newest on top) with search, type filter, sort order, and direct target/record deletion; added filter and sort controls to Journal, Testimonies, and Covenant Petitions; applied comma formatting across all figures.
+
+---
+
 ## 📜 NPM Scripts Reference
 
 - `npm run dev`: Runs the Angular development server on port 3000.

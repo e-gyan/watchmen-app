@@ -91,7 +91,8 @@ app.get('/api/health', (_req, res) => {
 });
 
 /**
- * Live FX Rates to GHS (Ghanaian Cedi) with 30-minute server cache
+ * Real-Time Market FX Rates Listener to GHS (Ghanaian Cedi)
+ * Continuously syncs with live market exchange rate feeds and streams updates via SSE (/api/fx-stream).
  */
 const DEFAULT_TO_GHS: Record<string, number> = {
   GHS: 1,
@@ -101,57 +102,157 @@ const DEFAULT_TO_GHS: Record<string, number> = {
   NGN: 0.01,
 };
 
-let cachedFx: {
+interface FxSnapshot {
   toGhs: Record<string, number>;
   updatedAt: string;
   source: 'live' | 'fallback';
   fetchedAtMs: number;
-} | null = null;
+}
 
-app.get('/api/fx-rates', async (_req, res) => {
-  const now = Date.now();
-  if (cachedFx && now - cachedFx.fetchedAtMs < 30 * 60 * 1000) {
-    return res.json(cachedFx);
-  }
+let cachedFx: FxSnapshot = {
+  toGhs: { ...DEFAULT_TO_GHS },
+  updatedAt: new Date().toISOString(),
+  source: 'fallback',
+  fetchedAtMs: 0,
+};
 
-  try {
-    const response = await fetch('https://open.er-api.com/v6/latest/GHS');
-    if (response.ok) {
-      const data = (await response.json()) as {
-        rates?: Record<string, number>;
-        time_last_update_utc?: string;
-      };
-      if (data.rates) {
-        const toGhs: Record<string, number> = { ...DEFAULT_TO_GHS, GHS: 1 };
-        for (const [code, rateFromGhs] of Object.entries(data.rates)) {
-          if (typeof rateFromGhs === 'number' && rateFromGhs > 0) {
-            toGhs[code] = Number((1 / rateFromGhs).toFixed(4));
-          }
-        }
-        cachedFx = {
-          toGhs,
-          updatedAt: data.time_last_update_utc || new Date().toISOString(),
-          source: 'live',
-          fetchedAtMs: now,
-        };
-        return res.json(cachedFx);
-      }
+const fxSseClients = new Set<express.Response>();
+const cloudSseClients = new Set<express.Response>();
+
+function broadcastFxUpdate(snapshot: FxSnapshot): void {
+  const payload = `data: ${JSON.stringify(snapshot)}\n\n`;
+  for (const client of fxSseClients) {
+    try {
+      client.write(payload);
+    } catch {
+      fxSseClients.delete(client);
     }
-  } catch {
-    // Fallback if external rate service is unreachable
+  }
+}
+
+function broadcastCloudUpdate(eventData: Record<string, unknown>): void {
+  const payload = `data: ${JSON.stringify(eventData)}\n\n`;
+  for (const client of cloudSseClients) {
+    try {
+      client.write(payload);
+    } catch {
+      cloudSseClients.delete(client);
+    }
+  }
+}
+
+async function fetchLatestMarketFxRates(): Promise<FxSnapshot> {
+  const now = Date.now();
+  const endpoints = [
+    'https://open.er-api.com/v6/latest/GHS',
+    'https://api.exchangerate-api.com/v4/latest/GHS',
+  ];
+
+  for (const url of endpoints) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      clearTimeout(timeout);
+
+      if (response.ok) {
+        const data = (await response.json()) as {
+          rates?: Record<string, number>;
+          time_last_update_utc?: string;
+          date?: string;
+        };
+        if (data.rates) {
+          const toGhs: Record<string, number> = { ...DEFAULT_TO_GHS, GHS: 1 };
+          for (const [code, rateFromGhs] of Object.entries(data.rates)) {
+            if (typeof rateFromGhs === 'number' && rateFromGhs > 0) {
+              toGhs[code] = Number((1 / rateFromGhs).toFixed(4));
+            }
+          }
+          const nextSnapshot: FxSnapshot = {
+            toGhs,
+            updatedAt: new Date().toISOString(),
+            source: 'live',
+            fetchedAtMs: now,
+          };
+          const prevJson = JSON.stringify(cachedFx.toGhs);
+          const nextJson = JSON.stringify(nextSnapshot.toGhs);
+          const changed = prevJson !== nextJson || cachedFx.source !== 'live';
+          cachedFx = nextSnapshot;
+          if (changed) {
+            broadcastFxUpdate(cachedFx);
+          }
+          return cachedFx;
+        }
+      }
+    } catch {
+      // Try next market FX provider
+    }
   }
 
-  return res.json({
-    toGhs: DEFAULT_TO_GHS,
-    updatedAt: new Date().toISOString(),
-    source: 'fallback',
-    fetchedAtMs: now,
+  return cachedFx;
+}
+
+// Start background real-time market FX listener (syncs immediately and every 30s)
+fetchLatestMarketFxRates().catch(() => undefined);
+const fxInterval = setInterval(() => {
+  fetchLatestMarketFxRates().catch(() => undefined);
+}, 30 * 1000);
+if (typeof fxInterval.unref === 'function') {
+  fxInterval.unref();
+}
+
+app.get('/api/fx-rates', async (req, res) => {
+  const force = req.query['force'] === '1' || req.query['force'] === 'true';
+  const now = Date.now();
+  if (force || cachedFx.source !== 'live' || now - cachedFx.fetchedAtMs > 15 * 1000) {
+    await fetchLatestMarketFxRates();
+  }
+  return res.json(cachedFx);
+});
+
+/**
+ * Real-Time SSE Stream for Market Currency Rates (/api/fx-stream)
+ */
+app.get('/api/fx-stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  // Send immediate snapshot on connect (0ms)
+  res.write(`data: ${JSON.stringify(cachedFx)}\n\n`);
+  fxSseClients.add(res);
+
+  // Trigger a fresh market check in background
+  fetchLatestMarketFxRates().catch(() => undefined);
+
+  req.on('close', () => {
+    fxSseClients.delete(res);
   });
 });
 
 /**
- * Render Fallback Cloud Sync Endpoint (allows partners signed in via Email/Name
- * on Render to sync prayer circles, sessions, testimonies, requests, messages, and seeds).
+ * Real-Time SSE Stream for Database Cloud Sync (/api/cloud-stream)
+ */
+app.get('/api/cloud-stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: Date.now() })}\n\n`);
+  cloudSseClients.add(res);
+
+  req.on('close', () => {
+    cloudSseClients.delete(res);
+  });
+});
+
+/**
+ * Cloud Sync Endpoint (allows instant 0ms read/write sync across Firebase & Express persistent store)
  */
 app.get('/api/cloud-sync', (req, res) => {
   const email = String(req.query['email'] || '').toLowerCase().trim();
@@ -162,17 +263,22 @@ app.get('/api/cloud-sync', (req, res) => {
         const emails = Array.isArray(p['memberEmails']) ? (p['memberEmails'] as string[]) : [];
         return emails.map((e) => e.toLowerCase()).includes(email);
       })
-    : [];
+    : memoryStore.partnerships;
 
-  if (partnershipId) {
+  const targetPid =
+    partnershipId ||
+    (userPartnerships.length > 0 ? String(userPartnerships[0]['id'] || '') : '');
+
+  if (targetPid) {
     return res.json({
+      activePartnershipId: targetPid,
       partnerships: userPartnerships,
-      sessions: memoryStore.sessions[partnershipId] || [],
-      testimonies: memoryStore.testimonies[partnershipId] || [],
-      requests: memoryStore.requests[partnershipId] || [],
-      messages: memoryStore.messages[partnershipId] || [],
-      authorities: memoryStore.authorities[partnershipId] || [],
-      seeds: memoryStore.seeds[partnershipId] || [],
+      sessions: memoryStore.sessions[targetPid] || [],
+      testimonies: memoryStore.testimonies[targetPid] || [],
+      requests: memoryStore.requests[targetPid] || [],
+      messages: memoryStore.messages[targetPid] || [],
+      authorities: memoryStore.authorities[targetPid] || [],
+      seeds: memoryStore.seeds[targetPid] || [],
     });
   }
 
@@ -192,6 +298,7 @@ app.post('/api/cloud-sync', (req, res) => {
       memoryStore.partnerships.push(item);
     }
     saveCloudStore(memoryStore);
+    broadcastCloudUpdate({ type, action, partnershipId: item.id, timestamp: Date.now() });
     return res.json({ ok: true });
   }
 
@@ -208,12 +315,19 @@ app.post('/api/cloud-sync', (req, res) => {
 
     if (action === 'delete') {
       if (idx >= 0) list.splice(idx, 1);
+      // Cascade delete all seed amounts recorded under this authority target
+      if (type === 'authorities' && memoryStore.seeds[partnershipId]) {
+        memoryStore.seeds[partnershipId] = memoryStore.seeds[partnershipId].filter(
+          (seed) => seed['authorityId'] !== item.id
+        );
+      }
     } else if (idx >= 0) {
       list[idx] = { ...list[idx], ...item };
     } else {
       list.push(item);
     }
     saveCloudStore(memoryStore);
+    broadcastCloudUpdate({ type, action, partnershipId, itemId: item.id, timestamp: Date.now() });
     return res.json({ ok: true });
   }
 

@@ -73,10 +73,10 @@ import { MessageListeningRecord } from '../models/prayer.model';
             Messages
           </span>
           <div class="text-2xl sm:text-3xl font-serif font-bold text-emerald-400 tabular-nums">
-            {{ filteredMessages().length }}
+            {{ firebaseService.formatInteger(filteredMessages().length) }}
           </div>
           <span class="text-[11px] text-stone-500 font-mono tabular-nums">
-            {{ firebaseService.totalMessageRepeats() }} total listenings
+            {{ firebaseService.formatInteger(firebaseService.totalMessageRepeats()) }} total listenings
           </span>
         </div>
       </div>
@@ -250,21 +250,71 @@ import { MessageListeningRecord } from '../models/prayer.model';
         </div>
       }
 
+      <!-- Filter & Sort Bar -->
+      @if (firebaseService.messages().length > 0) {
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
+          <div>
+            <label for="msgSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
+            <input
+              id="msgSearch"
+              type="text"
+              [value]="searchQuery()"
+              (input)="searchQuery.set($any($event.target).value)"
+              placeholder="Search title or speaker..."
+              class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+
+          <div>
+            <label for="msgModeFilter" class="block text-[11px] font-medium text-stone-400 mb-1">Mode</label>
+            <select
+              id="msgModeFilter"
+              [value]="filterMode()"
+              (change)="filterMode.set($any($event.target).value)"
+              class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            >
+              <option value="all">All Modes</option>
+              <option value="individual">Individual</option>
+              <option value="partner">With Partner</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="msgSort" class="block text-[11px] font-medium text-stone-400 mb-1">Sort</label>
+            <select
+              id="msgSort"
+              [value]="sortBy()"
+              (change)="sortBy.set($any($event.target).value)"
+              class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="mostTime">Most Time</option>
+              <option value="mostListened">Most Listened</option>
+            </select>
+          </div>
+        </div>
+      }
+
       <!-- Recorded Messages List -->
       @if (filteredMessages().length === 0) {
         <div class="text-center py-12 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-3">
           <mat-icon class="text-stone-600" style="font-size: 40px;">headphones</mat-icon>
-          <h3 class="text-base font-semibold text-stone-300">No messages yet</h3>
+          <h3 class="text-base font-semibold text-stone-300">
+            {{ firebaseService.messages().length === 0 ? 'No messages yet' : 'No matching messages' }}
+          </h3>
           <p class="text-xs text-stone-500 max-w-sm mx-auto">
-            Log your first message and duration.
+            {{ firebaseService.messages().length === 0 ? 'Log your first message and duration.' : 'Try adjusting your search or filter.' }}
           </p>
-          <button
-            type="button"
-            (click)="openForm()"
-            class="py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
-          >
-            Log Message
-          </button>
+          @if (firebaseService.messages().length === 0) {
+            <button
+              type="button"
+              (click)="openForm()"
+              class="py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
+            >
+              Log Message
+            </button>
+          }
         </div>
       } @else {
         <div class="space-y-3">
@@ -282,7 +332,7 @@ import { MessageListeningRecord } from '../models/prayer.model';
                       Initial: {{ firebaseService.formatMinutes(baseMins) }}
                     </span>
                     <span class="px-2 py-0.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono text-[11px] font-semibold tabular-nums">
-                      {{ msg.listenCount || 1 }}x listened
+                      {{ firebaseService.formatInteger(msg.listenCount || 1) }}x listened
                     </span>
                     <span class="text-xs font-mono text-stone-400">{{ msg.date }}</span>
                     <span class="text-stone-600">·</span>
@@ -428,6 +478,11 @@ export class MessagesTracker {
   readonly editingMessage = signal<MessageListeningRecord | null>(null);
   readonly addingTimeForId = signal<string | null>(null);
 
+  // Filter & Sort state
+  readonly searchQuery = signal('');
+  readonly filterMode = signal<'all' | 'individual' | 'partner'>('all');
+  readonly sortBy = signal<'newest' | 'oldest' | 'mostTime' | 'mostListened'>('newest');
+
   readonly form = new FormGroup({
     title: new FormControl<string>('', { nonNullable: true, validators: [Validators.required] }),
     speaker: new FormControl<string>('', { nonNullable: true }),
@@ -447,10 +502,54 @@ export class MessagesTracker {
   });
 
   readonly filteredMessages = computed(() => {
-    const filter = this.firebaseService.activeFilterMember();
-    const all = this.firebaseService.messages();
-    if (filter === 'all') return all;
-    return all.filter((m) => m.authorUid === filter || m.authorName === filter);
+    const memberFilter = this.firebaseService.activeFilterMember();
+    const query = this.searchQuery().trim().toLowerCase();
+    const mode = this.filterMode();
+    const sort = this.sortBy();
+
+    let list = this.firebaseService.messages();
+
+    if (memberFilter !== 'all') {
+      list = list.filter((m) => m.authorUid === memberFilter || m.authorName === memberFilter);
+    }
+
+    if (mode === 'partner') {
+      list = list.filter((m) => !!m.wasTogether);
+    } else if (mode === 'individual') {
+      list = list.filter((m) => !m.wasTogether);
+    }
+
+    if (query) {
+      list = list.filter(
+        (m) =>
+          m.title.toLowerCase().includes(query) ||
+          (m.speaker && m.speaker.toLowerCase().includes(query)) ||
+          (m.notes && m.notes.toLowerCase().includes(query)) ||
+          m.authorName.toLowerCase().includes(query)
+      );
+    }
+
+    return [...list].sort((a, b) => {
+      if (sort === 'oldest') {
+        return (
+          (a.date || '').localeCompare(b.date || '') ||
+          (a.createdAt || '').localeCompare(b.createdAt || '') ||
+          (a.id || '').localeCompare(b.id || '')
+        );
+      }
+      if (sort === 'mostTime') {
+        return (Number(b.durationMinutes) || 0) - (Number(a.durationMinutes) || 0);
+      }
+      if (sort === 'mostListened') {
+        return (Number(b.listenCount) || 1) - (Number(a.listenCount) || 1);
+      }
+      // Default: 'newest'
+      return (
+        (b.date || '').localeCompare(a.date || '') ||
+        (b.createdAt || '').localeCompare(a.createdAt || '') ||
+        (b.id || '').localeCompare(a.id || '')
+      );
+    });
   });
 
   readonly totalListeningMinutes = computed(() => {
