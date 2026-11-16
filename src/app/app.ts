@@ -11,7 +11,6 @@ import { ReactiveFormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { FirebaseService } from './services/firebase.service';
 import {
-  DailyPrayerBundle,
   PRAYER_CATEGORIES,
   PrayerRequest,
   PrayerSession,
@@ -25,11 +24,24 @@ import { CreateCircleModal } from './components/create-circle-modal';
 import { AddPartnerModal } from './components/add-partner-modal';
 import { MessagesTracker } from './components/messages-tracker';
 import { SeedTracker } from './components/seed-tracker';
+import { Streak } from './components/streak';
 import { ThemeToggle } from './components/theme-toggle';
 import { AuthModal } from './components/auth-modal';
 import { ThemeService } from './services/theme.service';
+import { PwaService } from './services/pwa.service';
 
 export type AppTab = 'dashboard' | 'messages' | 'seeds' | 'journal' | 'testimonies' | 'covenant';
+export type JournalGroupMode = 'day' | 'week' | 'month' | 'year' | 'custom' | 'all';
+
+export interface JournalRecordGroup {
+  key: string;
+  title: string;
+  subtitle: string;
+  totalMinutes: number;
+  sessionsCount: number;
+  sessions: PrayerSession[];
+  defaultDate?: string;
+}
 
 @Component({
   selector: 'app-root',
@@ -46,6 +58,7 @@ export type AppTab = 'dashboard' | 'messages' | 'seeds' | 'journal' | 'testimoni
     AddPartnerModal,
     MessagesTracker,
     SeedTracker,
+    Streak,
     ThemeToggle,
     AuthModal,
   ],
@@ -55,6 +68,7 @@ export type AppTab = 'dashboard' | 'messages' | 'seeds' | 'journal' | 'testimoni
 export class App {
   readonly firebaseService = inject(FirebaseService);
   readonly themeService = inject(ThemeService);
+  readonly pwaService = inject(PwaService);
   private http = inject(HttpClient);
 
   // Active navigation tab
@@ -63,8 +77,10 @@ export class App {
   // Collapsible Header Menu state
   readonly showHeaderMenu = signal<boolean>(false);
 
-  // Journal View Mode: Daily Bundles (grouped by day) vs Timeline Stream
-  readonly journalViewMode = signal<'bundles' | 'stream'>('bundles');
+  // Journal Grouping Mode: Day, Week, Month, Year, Custom, or All
+  readonly journalGroupMode = signal<JournalGroupMode>('day');
+  readonly journalCustomStart = signal<string>(this.getDefaultCustomStartDate());
+  readonly journalCustomEnd = signal<string>(this.firebaseService.getTodayDateString());
 
   // Modals state
   readonly showLogModal = signal(false);
@@ -286,13 +302,25 @@ export class App {
     });
   });
 
-  // Filtered session journal list (Timeline stream)
+  // Filtered session journal list (with custom date range support when 'custom' is active)
   readonly displayedJournalSessions = computed(() => {
     let list = this.firebaseService.sessions();
     const query = this.journalSearch().trim().toLowerCase();
     const cat = this.journalCategory();
     const member = this.journalMember();
     const sort = this.journalSort();
+    const mode = this.journalGroupMode();
+    const start = this.journalCustomStart();
+    const end = this.journalCustomEnd();
+
+    if (mode === 'custom') {
+      if (start) {
+        list = list.filter((s) => s.date >= start);
+      }
+      if (end) {
+        list = list.filter((s) => s.date <= end);
+      }
+    }
 
     if (member !== 'all') {
       list = list.filter(
@@ -342,88 +370,119 @@ export class App {
     });
   });
 
-  // Filtered Daily Prayer Bundles
-  readonly displayedDailyBundles = computed<DailyPrayerBundle[]>(() => {
-    const bundles = this.firebaseService.dailyPrayerBundles();
-    const query = this.journalSearch().trim().toLowerCase();
-    const cat = this.journalCategory();
-    const member = this.journalMember();
+  // Grouped Journal Records by Day, Week, Month, Year, or Custom Date Range
+  readonly groupedJournalRecords = computed<JournalRecordGroup[]>(() => {
+    const sessions = this.displayedJournalSessions();
+    const mode = this.journalGroupMode();
     const sort = this.journalSort();
 
-    const filteredBundles = bundles
-      .map((bundle) => {
-        let matchingSessions = bundle.sessions;
+    if (mode === 'all') {
+      return [];
+    }
 
-        if (member !== 'all') {
-          matchingSessions = matchingSessions.filter(
-            (s) =>
-              s.authorUid === member ||
-              s.authorName === member ||
-              s.participantNames?.includes(member)
-          );
-        }
+    if (mode === 'custom') {
+      if (sessions.length === 0) return [];
+      const start = this.journalCustomStart() || 'Start';
+      const end = this.journalCustomEnd() || 'Today';
+      const totalMinutes = sessions.reduce((acc, s) => acc + (Number(s.durationMinutes) || 0), 0);
+      return [
+        {
+          key: `custom-${start}-${end}`,
+          title: `${start} — ${end}`,
+          subtitle: 'Custom Range',
+          totalMinutes,
+          sessionsCount: sessions.length,
+          sessions,
+          defaultDate: this.firebaseService.getTodayDateString(),
+        },
+      ];
+    }
 
-        if (cat !== 'all') {
-          matchingSessions = matchingSessions.filter(
-            (s) => s.category === cat || (s.categories && s.categories.includes(cat))
-          );
-        }
+    const groupMap = new Map<string, JournalRecordGroup>();
 
-        if (query) {
-          matchingSessions = matchingSessions.filter(
-            (s) =>
-              s.notes.toLowerCase().includes(query) ||
-              (s.scripture && s.scripture.toLowerCase().includes(query)) ||
-              s.category.toLowerCase().includes(query) ||
-              (s.categories && s.categories.some((c) => c.toLowerCase().includes(query))) ||
-              s.authorName.toLowerCase().includes(query) ||
-              (s.participantNames && s.participantNames.some((p) => p.toLowerCase().includes(query))) ||
-              s.topics.some((t) => t.toLowerCase().includes(query))
-          );
-        }
+    for (const s of sessions) {
+      const [yStr, mStr, dStr] = (s.date || '').split('-');
+      const year = Number(yStr) || new Date().getFullYear();
+      const month = Number(mStr) || 1;
+      const day = Number(dStr) || 1;
+      const dateObj = new Date(year, month - 1, day);
 
-        const sortedSessions = [...matchingSessions].sort((a, b) => {
-          if (sort === 'oldest') {
-            return (
-              (a.startTime || '').localeCompare(b.startTime || '') ||
-              (a.id || '').localeCompare(b.id || '')
-            );
-          }
-          if (sort === 'longest') {
-            return (Number(b.durationMinutes) || 0) - (Number(a.durationMinutes) || 0);
-          }
-          return (
-            (b.startTime || '').localeCompare(a.startTime || '') ||
-            (b.id || '').localeCompare(a.id || '')
-          );
+      let key = s.date;
+      let title = s.date;
+      let subtitle = '';
+      let defaultDate = s.date;
+
+      if (mode === 'day') {
+        key = s.date;
+        title = dateObj.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
         });
+        subtitle = s.date;
+        defaultDate = s.date;
+      } else if (mode === 'week') {
+        const dayOfWeek = dateObj.getDay();
+        const distToMonday = (dayOfWeek + 6) % 7;
+        const monday = new Date(dateObj);
+        monday.setDate(dateObj.getDate() - distToMonday);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
 
-        const filteredTotalMins = sortedSessions.reduce((acc, s) => acc + s.durationMinutes, 0);
+        const monKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+        const monLabel = monday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const sunLabel = sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-        return {
-          ...bundle,
-          sessions: sortedSessions,
-          totalMinutes: filteredTotalMins,
-          metDailyTarget: filteredTotalMins >= bundle.dailyTargetMinutes,
-        };
-      })
-      .filter((bundle) => {
-        if (bundle.sessions.length > 0) return true;
-        if (query && (bundle.formattedDisplayDate.toLowerCase().includes(query) || bundle.dayName.toLowerCase().includes(query))) {
-          return true;
-        }
-        return false;
-      });
+        key = monKey;
+        title = `${monLabel} – ${sunLabel}`;
+        subtitle = 'Weekly Group';
+        defaultDate = s.date;
+      } else if (mode === 'month') {
+        key = `${year}-${String(month).padStart(2, '0')}`;
+        title = dateObj.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        subtitle = 'Monthly Group';
+        defaultDate = s.date;
+      } else if (mode === 'year') {
+        key = `${year}`;
+        title = `${year}`;
+        subtitle = 'Yearly Group';
+        defaultDate = s.date;
+      }
 
-    return [...filteredBundles].sort((a, b) => {
+      const existing = groupMap.get(key);
+      if (existing) {
+        existing.sessions.push(s);
+        existing.totalMinutes += Number(s.durationMinutes) || 0;
+        existing.sessionsCount += 1;
+      } else {
+        groupMap.set(key, {
+          key,
+          title,
+          subtitle,
+          totalMinutes: Number(s.durationMinutes) || 0,
+          sessionsCount: 1,
+          sessions: [s],
+          defaultDate,
+        });
+      }
+    }
+
+    const groups = Array.from(groupMap.values());
+    return groups.sort((a, b) => {
       if (sort === 'oldest') {
-        return a.date.localeCompare(b.date);
+        return a.key.localeCompare(b.key);
       }
       if (sort === 'longest') {
-        return b.totalMinutes - a.totalMinutes || b.date.localeCompare(a.date);
+        return b.totalMinutes - a.totalMinutes || b.key.localeCompare(a.key);
       }
-      return b.date.localeCompare(a.date);
+      return b.key.localeCompare(a.key);
     });
+  });
+
+  // Total minutes across currently filtered Journal sessions
+  readonly filteredJournalTotalMinutes = computed(() => {
+    return this.displayedJournalSessions().reduce((acc, s) => acc + (Number(s.durationMinutes) || 0), 0);
   });
 
   // Filtered testimonies list (Newest on top by default)
@@ -516,6 +575,61 @@ export class App {
     const maxVal = Math.max(target * 1.2, ...weeks.map((w) => w.totalMinutes));
     return Math.max(480, maxVal);
   });
+
+  private getDefaultCustomStartDate(): string {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  setCustomRangePreset(preset: '7d' | '30d' | '90d' | 'year') {
+    const today = new Date();
+    const endStr = this.firebaseService.getTodayDateString();
+    this.journalCustomEnd.set(endStr);
+
+    if (preset === 'year') {
+      this.journalCustomStart.set(`${today.getFullYear()}-01-01`);
+      return;
+    }
+
+    const days = preset === '7d' ? 7 : preset === '30d' ? 30 : 90;
+    const start = new Date();
+    start.setDate(today.getDate() - days);
+    const y = start.getFullYear();
+    const m = String(start.getMonth() + 1).padStart(2, '0');
+    const d = String(start.getDate()).padStart(2, '0');
+    this.journalCustomStart.set(`${y}-${m}-${d}`);
+  }
+
+  async installPwaApp() {
+    this.showHeaderMenu.set(false);
+    const accepted = await this.pwaService.promptInstall();
+    if (accepted) {
+      this.showToast('Watchman installed on your device.');
+    }
+  }
+
+  async enableNotificationAlerts() {
+    const status = await this.pwaService.enableNotifications();
+    if (status === 'granted') {
+      this.showToast('Notification alerts enabled.');
+    } else if (status === 'denied') {
+      this.showToast('Notifications blocked in browser settings.');
+    } else if (status === 'unsupported') {
+      this.showToast('Notifications not supported in this browser.');
+    }
+  }
+
+  async sendTestNotificationAlert() {
+    await this.pwaService.sendAlert(
+      'Watchman Prayer Reminder',
+      'Stay steadfast on your daily prayer and word watch.'
+    );
+    this.showToast('Test notification alert sent.');
+  }
 
   toggleHeaderMenu() {
     this.showHeaderMenu.update((v) => !v);

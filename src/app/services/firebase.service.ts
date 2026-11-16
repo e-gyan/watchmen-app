@@ -88,22 +88,28 @@ interface LocalCloudBackup {
   seeds: Record<string, SeedGivingRecord[]>;
 }
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const auth = getAuth(app);
+// Initialize Firebase in browser runtime only so SSR route extraction never hangs on open sockets/timers
+const isBrowserRuntime = typeof window !== 'undefined';
+const app = isBrowserRuntime ? initializeApp(firebaseConfig) : (null as unknown as ReturnType<typeof initializeApp>);
+export const db = isBrowserRuntime
+  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+  : (null as unknown as ReturnType<typeof getFirestore>);
+export const auth = isBrowserRuntime
+  ? getAuth(app)
+  : (null as unknown as ReturnType<typeof getAuth>);
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): never {
+  const currentUser = isBrowserRuntime ? auth?.currentUser : null;
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
+      userId: currentUser?.uid,
+      email: currentUser?.email,
+      emailVerified: currentUser?.emailVerified,
+      isAnonymous: currentUser?.isAnonymous,
+      tenantId: currentUser?.tenantId,
       providerInfo:
-        auth.currentUser?.providerData?.map((provider) => ({
+        currentUser?.providerData?.map((provider) => ({
           providerId: provider.providerId,
           email: provider.email,
         })) || [],
@@ -1546,10 +1552,10 @@ export class FirebaseService {
       void updateDoc(doc(db, 'partnerships', pId, 'sessions', sessionId), {
         linkedTestimonyId: testimonyId,
         linkedTestimonyTitle: testimonyTitle,
-      }).catch(() => {});
+      }).catch((err) => console.warn('Session testimony link warning:', err));
       void updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
         linkedSessionId: sessionId,
-      }).catch(() => {});
+      }).catch((err) => console.warn('Testimony session link warning:', err));
     }
   }
 

@@ -34,8 +34,21 @@
         }
       </div>
 
-      <!-- Right: Collapsible Menu Trigger Button -->
+      <!-- Right: Install App & Collapsible Menu Trigger Button -->
       <div class="flex items-center gap-2 shrink-0">
+        @if (!pwaService.isInstalled()) {
+          <button
+            type="button"
+            (click)="installPwaApp()"
+            class="flex items-center gap-1.5 py-1.5 px-3 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-all shrink-0 shadow-xs"
+            title="Install Watchman app on Android or desktop"
+          >
+            <mat-icon style="font-size: 16px;">install_mobile</mat-icon>
+            <span class="hidden sm:inline">Install App</span>
+            <span class="sm:hidden">Install</span>
+          </button>
+        }
+
         <button
           type="button"
           (click)="toggleHeaderMenu()"
@@ -258,13 +271,47 @@
           </div>
         }
 
-        <!-- Section 3: Theme Schedule (Auto 6:45 AM Light / 6:45 PM Dark + Manual Toggle) & Account -->
+        <!-- Section 3: Theme Schedule, PWA Install, Notification Alerts & Account -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-stone-800/80 text-xs">
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-stone-400 text-[11px]">
               Theme (Auto 6:45):
             </span>
             <app-theme-toggle (selected)="closeHeaderMenu()" />
+
+            @if (!pwaService.isInstalled()) {
+              <button
+                type="button"
+                (click)="installPwaApp()"
+                class="flex items-center gap-1 py-1.5 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-medium transition-colors"
+              >
+                <mat-icon style="font-size: 15px;">download</mat-icon>
+                <span>Install App</span>
+              </button>
+            }
+
+            @if (pwaService.notificationStatus() !== 'unsupported') {
+              @if (pwaService.notificationStatus() === 'granted') {
+                <button
+                  type="button"
+                  (click)="sendTestNotificationAlert()"
+                  class="flex items-center gap-1 py-1.5 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-medium transition-colors"
+                  title="Send a test notification alert"
+                >
+                  <mat-icon style="font-size: 15px;">notifications_active</mat-icon>
+                  <span>Alerts On</span>
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  (click)="enableNotificationAlerts()"
+                  class="flex items-center gap-1 py-1.5 px-2.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700 font-medium transition-colors"
+                >
+                  <mat-icon style="font-size: 15px;">notifications</mat-icon>
+                  <span>Enable Alerts</span>
+                </button>
+              }
+            }
           </div>
 
           <div class="flex items-center justify-between sm:justify-end gap-3">
@@ -779,45 +826,10 @@
                 </div>
               </div>
 
-              <!-- Streak & Consistency Card -->
-              <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
-                <div class="flex items-center justify-between">
-                  <span class="text-xs font-semibold uppercase tracking-wider text-stone-400">
-                    Streak
-                  </span>
-                  <span class="text-xs font-mono text-amber-400">Consistency</span>
-                </div>
-
-                <div class="flex items-baseline justify-between">
-                  <div>
-                    <div class="text-3xl font-serif font-bold text-amber-400 tabular-nums flex items-center gap-1">
-                      <span>{{ firebaseService.streakDays() }}</span>
-                      <span class="text-base font-sans font-normal text-stone-400">days</span>
-                    </div>
-                    <span class="text-xs text-stone-400">Active Streak</span>
-                  </div>
-
-                  <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                    <mat-icon>local_fire_department</mat-icon>
-                  </div>
-                </div>
-
-                <!-- Testimonies count and session stats -->
-                <div class="pt-2 border-t border-stone-800 grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span class="text-stone-500">Sessions</span>
-                    <div class="text-stone-200 font-semibold font-mono tabular-nums">
-                      {{ firebaseService.sessions().length }}
-                    </div>
-                  </div>
-                  <div>
-                    <span class="text-stone-500">Testimonies</span>
-                    <div class="text-amber-400 font-semibold font-mono tabular-nums">
-                      {{ firebaseService.testimonies().length }}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <!-- Streak & Consistency Component -->
+              <app-streak
+                (selectDate)="openNewSessionModal(activeP.dailyTargetMinutes, $event)"
+              />
             </div>
 
             <!-- Analytical Charts Row: 5-Day Daily Chart & 2-Week Trend Chart -->
@@ -1149,9 +1161,10 @@
         />
       }
 
-      <!-- TAB 3: SESSION JOURNAL & DAILY PRAYER BUNDLES -->
+      <!-- TAB 3: SESSION JOURNAL (Minimalist Cards + Group by Day, Week, Month, Year, Custom, All) -->
       @if (activeTab() === 'journal') {
-        <div class="space-y-6">
+        <div class="space-y-5">
+          <!-- Header & Primary Action -->
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-800/80">
             <div>
               <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
@@ -1161,39 +1174,85 @@
                 Journal
               </h1>
               <p class="text-xs text-stone-400 mt-0.5">
-                Daily prayer records and notes.
+                Total shown: <span class="font-mono font-bold text-amber-400 tabular-nums">{{ firebaseService.formatHours(filteredJournalTotalMinutes()) }} hrs</span>
+                · <span class="font-mono tabular-nums">{{ firebaseService.formatInteger(displayedJournalSessions().length) }}</span> records
               </p>
             </div>
 
-            <div class="flex items-center gap-3 shrink-0">
-              <!-- View Mode Toggle: Daily Bundles vs Timeline Stream -->
-              <div class="flex items-center bg-stone-900 border border-stone-800 rounded-xl p-1 text-xs">
+            <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+              <!-- Group By Segmented Selector: Day, Week, Month, Year, Custom, All -->
+              <div class="flex flex-wrap items-center bg-stone-900 border border-stone-800 rounded-xl p-1 text-xs gap-0.5">
                 <button
                   type="button"
-                  (click)="journalViewMode.set('bundles')"
-                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all"
+                  (click)="journalGroupMode.set('day')"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
                   [class]="
-                    journalViewMode() === 'bundles'
+                    journalGroupMode() === 'day'
                       ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
                       : 'text-stone-400 hover:text-stone-200'
                   "
                 >
-                  <mat-icon style="font-size: 16px;">calendar_view_day</mat-icon>
-                  <span>By Day</span>
+                  Day
                 </button>
-
                 <button
                   type="button"
-                  (click)="journalViewMode.set('stream')"
-                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium transition-all"
+                  (click)="journalGroupMode.set('week')"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
                   [class]="
-                    journalViewMode() === 'stream'
+                    journalGroupMode() === 'week'
                       ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
                       : 'text-stone-400 hover:text-stone-200'
                   "
                 >
-                  <mat-icon style="font-size: 16px;">view_timeline</mat-icon>
-                  <span>All</span>
+                  Week
+                </button>
+                <button
+                  type="button"
+                  (click)="journalGroupMode.set('month')"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  [class]="
+                    journalGroupMode() === 'month'
+                      ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
+                      : 'text-stone-400 hover:text-stone-200'
+                  "
+                >
+                  Month
+                </button>
+                <button
+                  type="button"
+                  (click)="journalGroupMode.set('year')"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  [class]="
+                    journalGroupMode() === 'year'
+                      ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
+                      : 'text-stone-400 hover:text-stone-200'
+                  "
+                >
+                  Year
+                </button>
+                <button
+                  type="button"
+                  (click)="journalGroupMode.set('custom')"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  [class]="
+                    journalGroupMode() === 'custom'
+                      ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
+                      : 'text-stone-400 hover:text-stone-200'
+                  "
+                >
+                  Custom
+                </button>
+                <button
+                  type="button"
+                  (click)="journalGroupMode.set('all')"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  [class]="
+                    journalGroupMode() === 'all'
+                      ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
+                      : 'text-stone-400 hover:text-stone-200'
+                  "
+                >
+                  All
                 </button>
               </div>
 
@@ -1208,8 +1267,67 @@
             </div>
           </div>
 
-          <!-- Filters & Sort Bar -->
-          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
+          <!-- Custom Date Range Picker Bar (Visible when 'custom' grouping is selected) -->
+          @if (journalGroupMode() === 'custom') {
+            <div class="p-4 rounded-xl bg-stone-900 border border-amber-500/30 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1">
+                <div>
+                  <label for="jCustomStart" class="block text-[11px] font-medium text-stone-400 mb-1">From Date</label>
+                  <input
+                    id="jCustomStart"
+                    type="date"
+                    [value]="journalCustomStart()"
+                    (change)="journalCustomStart.set($any($event.target).value)"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs font-mono tabular-nums text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label for="jCustomEnd" class="block text-[11px] font-medium text-stone-400 mb-1">To Date</label>
+                  <input
+                    id="jCustomEnd"
+                    type="date"
+                    [value]="journalCustomEnd()"
+                    (change)="journalCustomEnd.set($any($event.target).value)"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs font-mono tabular-nums text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  (click)="setCustomRangePreset('7d')"
+                  class="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300"
+                >
+                  Last 7D
+                </button>
+                <button
+                  type="button"
+                  (click)="setCustomRangePreset('30d')"
+                  class="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300"
+                >
+                  Last 30D
+                </button>
+                <button
+                  type="button"
+                  (click)="setCustomRangePreset('90d')"
+                  class="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300"
+                >
+                  Last 90D
+                </button>
+                <button
+                  type="button"
+                  (click)="setCustomRangePreset('year')"
+                  class="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300"
+                >
+                  This Year
+                </button>
+              </div>
+            </div>
+          }
+
+          <!-- Search, Category, Member & Sort Bar -->
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-stone-900 border border-stone-800">
             <div>
               <label for="jSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
               <input
@@ -1217,7 +1335,7 @@
                 type="text"
                 [value]="journalSearch()"
                 (input)="journalSearch.set($any($event.target).value)"
-                placeholder="Search..."
+                placeholder="Search notes or category..."
                 class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
               />
             </div>
@@ -1267,15 +1385,12 @@
             </div>
           </div>
 
-          <!-- VIEW MODE 1: DAILY PRAYER BUNDLES (Grouped by day) -->
-          @if (journalViewMode() === 'bundles') {
-            @if (displayedDailyBundles().length === 0) {
+          <!-- GROUPED VIEW: DAY, WEEK, MONTH, YEAR, OR CUSTOM -->
+          @if (journalGroupMode() !== 'all') {
+            @if (groupedJournalRecords().length === 0) {
               <div class="text-center py-12 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-3">
-                <mat-icon class="text-stone-600" style="font-size: 40px;">calendar_view_day</mat-icon>
-                <h3 class="text-base font-semibold text-stone-300">No prayer logs yet</h3>
-                <p class="text-xs text-stone-500 max-w-sm mx-auto">
-                  Record your first prayer session to begin.
-                </p>
+                <mat-icon class="text-stone-600" style="font-size: 36px;">menu_book</mat-icon>
+                <h3 class="text-sm font-semibold text-stone-300">No prayer records found</h3>
                 <button
                   type="button"
                   (click)="openNewSessionModal()"
@@ -1285,197 +1400,102 @@
                 </button>
               </div>
             } @else {
-              <div class="space-y-6">
-                @for (bundle of displayedDailyBundles(); track bundle.date) {
-                  <div class="rounded-2xl bg-stone-900 border border-stone-800 overflow-hidden shadow-lg hover:border-stone-700/80 transition-all">
-                    <!-- Daily Bundle Header Banner -->
-                    <div class="bg-stone-950/80 px-5 sm:px-6 py-4 border-b border-stone-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                          <mat-icon style="font-size: 20px;">event</mat-icon>
-                        </div>
-                        <div>
-                          <div class="flex items-center gap-2">
-                            <h2 class="text-base sm:text-lg font-serif font-bold text-stone-100">
-                              {{ bundle.formattedDisplayDate }}
-                            </h2>
-                            <span class="text-xs text-stone-500 font-mono">({{ bundle.dayName }})</span>
-                          </div>
-                          <div class="flex items-center gap-2 text-xs mt-0.5">
-                            <span class="text-stone-400">
-                              {{ firebaseService.formatInteger(bundle.sessions.length) }} {{ bundle.sessions.length === 1 ? 'session' : 'sessions' }}
-                            </span>
-                            @if (bundle.testimoniesCount > 0) {
-                              <span class="text-amber-400 font-medium flex items-center gap-0.5">
-                                <mat-icon style="font-size: 14px;">celebration</mat-icon>
-                                {{ firebaseService.formatInteger(bundle.testimoniesCount) }} {{ bundle.testimoniesCount === 1 ? 'testimony' : 'testimonies' }}
-                              </span>
-                            }
-                          </div>
+              <div class="space-y-4">
+                @for (group of groupedJournalRecords(); track group.key) {
+                  <div class="rounded-2xl bg-stone-900 border border-stone-800 overflow-hidden">
+                    <!-- Clean Minimalist Group Header -->
+                    <div class="bg-stone-950/70 px-4 sm:px-5 py-3 border-b border-stone-800/80 flex items-center justify-between gap-3">
+                      <div class="min-w-0">
+                        <h2 class="text-sm sm:text-base font-serif font-bold text-stone-100 truncate">
+                          {{ group.title }}
+                        </h2>
+                        <div class="text-[11px] text-stone-400 flex items-center gap-1.5">
+                          <span>{{ group.subtitle }}</span>
+                          <span aria-hidden="true">·</span>
+                          <span><strong class="font-mono tabular-nums text-stone-300">{{ firebaseService.formatInteger(group.sessionsCount) }}</strong> {{ group.sessionsCount === 1 ? 'record' : 'records' }}</span>
                         </div>
                       </div>
 
-                      <div class="flex items-center gap-2.5">
-                        <div
-                          class="px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5"
-                          [class]="
-                            bundle.metDailyTarget
-                              ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300'
-                              : 'bg-amber-500/15 border-amber-500/40 text-amber-300'
-                          "
-                        >
-                          <mat-icon style="font-size: 15px;">
-                            {{ bundle.metDailyTarget ? 'check_circle' : 'hourglass_top' }}
-                          </mat-icon>
-                          <span class="font-mono">{{ firebaseService.formatMinutes(bundle.totalMinutes) }}</span>
-                          <span class="text-[11px] opacity-80">
-                            / {{ firebaseService.formatInteger(bundle.dailyTargetMinutes) }}m
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          (click)="openNewSessionForDate(bundle.date)"
-                          class="py-1.5 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-medium border border-stone-700/80 transition-colors flex items-center gap-1"
-                        >
-                          <mat-icon style="font-size: 16px;">add</mat-icon>
-                          <span>Add Time</span>
-                        </button>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <span class="font-mono font-bold text-amber-400 tabular-nums text-sm sm:text-base">
+                          {{ firebaseService.formatMinutes(group.totalMinutes) }}
+                        </span>
+                        @if (journalGroupMode() === 'day' && group.defaultDate) {
+                          <button
+                            type="button"
+                            (click)="openNewSessionForDate(group.defaultDate)"
+                            class="p-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 transition-colors"
+                            title="Add prayer time to this day"
+                          >
+                            <mat-icon style="font-size: 16px;">add</mat-icon>
+                          </button>
+                        }
                       </div>
                     </div>
 
-                    <!-- Sessions list inside this Day's Bundle -->
-                    <div class="p-5 sm:p-6 space-y-4">
-                      @for (s of bundle.sessions; track s.id; let idx = $index) {
-                        <div class="p-4 rounded-xl bg-stone-950/60 border border-stone-800/80 space-y-3 hover:border-stone-700 transition-all">
-                          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/60 pb-2.5">
-                            <div class="flex flex-wrap items-center gap-2 text-xs">
-                              <span class="font-mono font-bold text-amber-400 text-sm">
-                                {{ firebaseService.formatMinutes(s.durationMinutes) }}
+                    <!-- Simplified Journal Record Cards inside Group -->
+                    <div class="divide-y divide-stone-800/60">
+                      @for (s of group.sessions; track s.id) {
+                        <div class="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 hover:bg-stone-950/40 transition-colors">
+                          <div class="min-w-0 flex-1 space-y-0.5">
+                            <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                              <span class="font-semibold text-stone-100 truncate">
+                                {{ s.category || 'Prayer' }}
                               </span>
-                              @if (s.startTime) {
-                                <span class="text-stone-400">· {{ s.startTime }}</span>
-                              } @else {
-                                <span class="text-stone-500">· #{{ idx + 1 }}</span>
-                              }
-                              <span class="text-stone-500">·</span>
-                              <span class="text-stone-300 font-medium">{{ s.authorName }}</span>
+                              <span class="text-stone-600" aria-hidden="true">·</span>
+                              <span class="font-mono tabular-nums text-stone-400 text-[11px]">{{ s.date }}</span>
+                              <span class="text-stone-600" aria-hidden="true">·</span>
+                              <span class="text-stone-400 text-[11px]">{{ s.authorName }}</span>
                               @if (s.wasTogether) {
-                                <span class="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                                  Partner
-                                </span>
+                                <span class="text-stone-600" aria-hidden="true">·</span>
+                                <span class="text-amber-400 text-[11px] font-medium">Partner</span>
+                              }
+                              @if (s.linkedTestimonyId) {
+                                <span class="text-stone-600" aria-hidden="true">·</span>
+                                <span class="text-emerald-400 text-[11px] font-medium">Answered</span>
                               }
                             </div>
 
-                            <div class="flex flex-wrap items-center gap-1.5">
-                              @for (catName of (s.categories && s.categories.length > 0 ? s.categories : [s.category]); track catName) {
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-stone-800 border border-stone-700/60 text-[11px] text-stone-300">
-                                  <span>{{ catName }}</span>
-                                </span>
-                              }
-
-                              <div class="flex items-center gap-1 ml-1 pl-1 border-l border-stone-800">
-                                <button
-                                  type="button"
-                                  (click)="openEditSessionModal(s)"
-                                  class="p-1 rounded text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition-colors"
-                                  title="Edit"
-                                >
-                                  <mat-icon style="font-size: 16px;">edit</mat-icon>
-                                </button>
-                                <button
-                                  type="button"
-                                  (click)="confirmDelete('session', s.id)"
-                                  class="p-1 rounded text-stone-400 hover:text-red-400 hover:bg-stone-800 transition-colors"
-                                  title="Delete"
-                                >
-                                  <mat-icon style="font-size: 16px;">delete</mat-icon>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          @if (s.scripture || (s.topics && s.topics.length > 0)) {
-                            <div class="flex flex-wrap items-center gap-2 text-xs">
-                              @if (s.scripture) {
-                                <div class="flex items-center gap-1 bg-stone-900 text-amber-400 border border-stone-800 px-2.5 py-1 rounded-lg font-mono text-[11px]">
-                                  <mat-icon style="font-size: 13px;">auto_stories</mat-icon>
-                                  <span>{{ s.scripture }}</span>
-                                </div>
-                              }
-                              @for (t of s.topics; track t) {
-                                <span class="text-stone-400 bg-stone-900 px-2 py-0.5 rounded-md border border-stone-800 text-[11px]">
-                                  {{ t }}
-                                </span>
-                              }
-                            </div>
-                          }
-
-                          @if (s.notes) {
-                            <p class="text-xs sm:text-sm text-stone-200 leading-relaxed whitespace-pre-line">
-                              {{ s.notes }}
-                            </p>
-                          }
-
-                          <div class="pt-2 border-t border-stone-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                            @if (s.linkedTestimonyId) {
-                              <div class="flex items-center gap-1.5 text-xs text-amber-300 font-medium">
-                                <mat-icon style="font-size: 16px;" class="text-amber-400">celebration</mat-icon>
-                                <span>Testimony: <strong>{{ s.linkedTestimonyTitle || 'Recorded' }}</strong></span>
-                              </div>
-                              <button
-                                type="button"
-                                (click)="setTab('testimonies')"
-                                class="text-xs text-stone-400 hover:text-stone-100 flex items-center gap-1"
-                              >
-                                <span>View</span>
-                                <mat-icon style="font-size: 14px;">arrow_forward</mat-icon>
-                              </button>
-                            } @else {
-                              <span></span>
-                              <button
-                                type="button"
-                                (click)="allocateTestimonyForSession(s)"
-                                class="text-xs text-amber-400 hover:text-amber-300 font-semibold flex items-center gap-1.5 py-1 px-2.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-all"
-                              >
-                                <mat-icon style="font-size: 15px;">celebration</mat-icon>
-                                <span>Mark Answered</span>
-                              </button>
+                            @if (s.notes) {
+                              <p class="text-xs text-stone-400 line-clamp-1">
+                                {{ s.notes }}
+                              </p>
                             }
                           </div>
-                        </div>
-                      }
 
-                      @if (bundle.testimonies.length > 0) {
-                        <div class="mt-4 pt-4 border-t border-stone-800/80 space-y-2">
-                          <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                            <mat-icon style="font-size: 16px;">auto_awesome</mat-icon>
-                            <span>Testimonies ({{ firebaseService.formatInteger(bundle.testimonies.length) }})</span>
-                          </span>
+                          <div class="flex items-center gap-2 shrink-0">
+                            <span class="font-mono font-bold text-amber-400 tabular-nums text-sm">
+                              {{ firebaseService.formatMinutes(s.durationMinutes) }}
+                            </span>
 
-                          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            @for (t of bundle.testimonies; track t.id) {
-                              <div class="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 space-y-2">
-                                <div class="flex items-center justify-between">
-                                  <h4 class="text-xs font-bold text-amber-300 font-serif">{{ t.title }}</h4>
-                                  <button
-                                    type="button"
-                                    (click)="openEditTestimonyModal(t)"
-                                    class="text-stone-400 hover:text-amber-300 text-[11px] flex items-center gap-0.5"
-                                  >
-                                    <mat-icon style="font-size: 14px;">edit</mat-icon>
-                                    <span>Edit</span>
-                                  </button>
-                                </div>
-                                <p class="text-xs text-stone-300 line-clamp-2 leading-relaxed">
-                                  {{ t.answeredDetail }}
-                                </p>
-                                <div class="flex items-center justify-between text-[11px] text-stone-500 pt-1">
-                                  <span>{{ t.authorName }}</span>
-                                  <span class="text-amber-400 font-semibold">Amen ({{ firebaseService.formatInteger(t.amensCount) }})</span>
-                                </div>
-                              </div>
-                            }
+                            <div class="flex items-center gap-0.5">
+                              @if (!s.linkedTestimonyId) {
+                                <button
+                                  type="button"
+                                  (click)="allocateTestimonyForSession(s)"
+                                  class="p-1.5 rounded-lg text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition-colors"
+                                  title="Mark Answered"
+                                >
+                                  <mat-icon style="font-size: 15px;">celebration</mat-icon>
+                                </button>
+                              }
+                              <button
+                                type="button"
+                                (click)="openEditSessionModal(s)"
+                                class="p-1.5 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors"
+                                title="Edit"
+                              >
+                                <mat-icon style="font-size: 15px;">edit</mat-icon>
+                              </button>
+                              <button
+                                type="button"
+                                (click)="confirmDelete('session', s.id)"
+                                class="p-1.5 rounded-lg text-stone-400 hover:text-red-400 hover:bg-stone-800 transition-colors"
+                                title="Delete"
+                              >
+                                <mat-icon style="font-size: 15px;">delete</mat-icon>
+                              </button>
+                            </div>
                           </div>
                         </div>
                       }
@@ -1486,86 +1506,76 @@
             }
           }
 
-          <!-- VIEW MODE 2: TIMELINE STREAM -->
-          @if (journalViewMode() === 'stream') {
+          <!-- ALL STREAM VIEW (Flat Minimalist Cards) -->
+          @if (journalGroupMode() === 'all') {
             @if (displayedJournalSessions().length === 0) {
               <div class="text-center py-12 px-4 rounded-2xl bg-stone-900/50 border border-stone-800 space-y-2">
                 <mat-icon class="text-stone-600" style="font-size: 36px;">menu_book</mat-icon>
-                <h3 class="text-sm font-semibold text-stone-300">No matching sessions</h3>
+                <h3 class="text-sm font-semibold text-stone-300">No matching records</h3>
               </div>
             } @else {
-              <div class="space-y-4">
+              <div class="rounded-2xl bg-stone-900 border border-stone-800 divide-y divide-stone-800/60 overflow-hidden">
                 @for (s of displayedJournalSessions(); track s.id) {
-                  <div class="rounded-2xl bg-stone-900 border border-stone-800/80 p-5 space-y-3 hover:border-stone-700 transition-all">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/60 pb-2.5">
-                      <div class="flex flex-wrap items-center gap-2 text-xs text-stone-400">
-                        <span class="text-base font-serif font-bold text-amber-400 font-mono tabular-nums">
-                          {{ firebaseService.formatMinutes(s.durationMinutes) }}
+                  <div class="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-stone-950/40 transition-colors">
+                    <div class="min-w-0 flex-1 space-y-0.5">
+                      <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                        <span class="font-semibold text-stone-100 truncate">
+                          {{ s.category || 'Prayer' }}
                         </span>
-                        <span aria-hidden="true">·</span>
-                        <span class="font-medium text-stone-200">{{ s.date }}</span>
-                        @if (s.startTime) {
-                          <span class="text-stone-500">{{ s.startTime }}</span>
-                        }
-                        <span aria-hidden="true">·</span>
-                        <span class="font-medium text-amber-300">{{ s.authorName }}</span>
+                        <span class="text-stone-600" aria-hidden="true">·</span>
+                        <span class="font-mono tabular-nums text-stone-400 text-[11px]">{{ s.date }}</span>
+                        <span class="text-stone-600" aria-hidden="true">·</span>
+                        <span class="text-stone-400 text-[11px]">{{ s.authorName }}</span>
                         @if (s.wasTogether) {
-                          <span class="bg-amber-500/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-full font-semibold">
-                            Partner
-                          </span>
+                          <span class="text-stone-600" aria-hidden="true">·</span>
+                          <span class="text-amber-400 text-[11px] font-medium">Partner</span>
+                        }
+                        @if (s.linkedTestimonyId) {
+                          <span class="text-stone-600" aria-hidden="true">·</span>
+                          <span class="text-emerald-400 text-[11px] font-medium">Answered</span>
                         }
                       </div>
 
-                      <div class="flex flex-wrap items-center gap-2">
-                        @for (cat of (s.categories && s.categories.length > 0 ? s.categories : [s.category]); track cat) {
-                          <span class="text-[11px] text-stone-300 bg-stone-800 px-2 py-0.5 rounded-md border border-stone-700/60">
-                            {{ cat }}
-                          </span>
-                        }
+                      @if (s.notes) {
+                        <p class="text-xs text-stone-400 line-clamp-1">
+                          {{ s.notes }}
+                        </p>
+                      }
+                    </div>
 
+                    <div class="flex items-center gap-2 shrink-0">
+                      <span class="font-mono font-bold text-amber-400 tabular-nums text-sm">
+                        {{ firebaseService.formatMinutes(s.durationMinutes) }}
+                      </span>
+
+                      <div class="flex items-center gap-0.5">
+                        @if (!s.linkedTestimonyId) {
+                          <button
+                            type="button"
+                            (click)="allocateTestimonyForSession(s)"
+                            class="p-1.5 rounded-lg text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition-colors"
+                            title="Mark Answered"
+                          >
+                            <mat-icon style="font-size: 15px;">celebration</mat-icon>
+                          </button>
+                        }
                         <button
                           type="button"
                           (click)="openEditSessionModal(s)"
-                          class="p-1 rounded text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition-colors ml-1"
+                          class="p-1.5 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors"
                           title="Edit"
                         >
-                          <mat-icon style="font-size: 16px;">edit</mat-icon>
+                          <mat-icon style="font-size: 15px;">edit</mat-icon>
                         </button>
-
                         <button
                           type="button"
                           (click)="confirmDelete('session', s.id)"
-                          class="p-1 rounded text-stone-400 hover:text-red-400 hover:bg-stone-800 transition-colors"
+                          class="p-1.5 rounded-lg text-stone-400 hover:text-red-400 hover:bg-stone-800 transition-colors"
                           title="Delete"
                         >
-                          <mat-icon style="font-size: 16px;">delete</mat-icon>
+                          <mat-icon style="font-size: 15px;">delete</mat-icon>
                         </button>
                       </div>
-                    </div>
-
-                    @if (s.notes) {
-                      <p class="text-xs sm:text-sm text-stone-200 leading-relaxed whitespace-pre-line">
-                        {{ s.notes }}
-                      </p>
-                    }
-
-                    <div class="flex items-center justify-between pt-2 border-t border-stone-800/40">
-                      @if (s.linkedTestimonyId) {
-                        <span class="text-xs text-amber-400 font-semibold flex items-center gap-1">
-                          <mat-icon style="font-size: 16px;">celebration</mat-icon>
-                          <span>Answered: {{ s.linkedTestimonyTitle || 'Testimony' }}</span>
-                        </span>
-                      } @else {
-                        <span></span>
-                        <button
-                          type="button"
-                          (click)="allocateTestimonyForSession(s)"
-                          class="text-xs text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1"
-                        >
-                          <mat-icon style="font-size: 16px;">celebration</mat-icon>
-                          <span>Mark Answered</span>
-                        </button>
-                      }
                     </div>
                   </div>
                 }
@@ -2080,6 +2090,76 @@
           </button>
         </div>
       </div>
+    </div>
+  }
+
+  <!-- PWA Install Guide Modal (Android / iOS / Desktop) -->
+  @if (pwaService.showInstallGuide()) {
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <mat-icon class="text-amber-400" style="font-size: 20px;">install_mobile</mat-icon>
+            <h3 class="text-base font-serif font-bold text-stone-100">Install Watchman</h3>
+          </div>
+          <button
+            type="button"
+            (click)="pwaService.closeInstallGuide()"
+            class="p-1 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+          >
+            <mat-icon style="font-size: 18px;">close</mat-icon>
+          </button>
+        </div>
+
+        @if (pwaService.isIOS()) {
+          <div class="space-y-2 text-xs text-stone-300 leading-relaxed">
+            <p>1. Tap the <strong>Share</strong> icon in Safari.</p>
+            <p>2. Select <strong>Add to Home Screen</strong>.</p>
+          </div>
+        } @else {
+          <div class="space-y-2 text-xs text-stone-300 leading-relaxed">
+            <p>1. Tap the browser menu (<strong>⋮</strong>) in Chrome on Android.</p>
+            <p>2. Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.</p>
+          </div>
+        }
+
+        <div class="pt-2 border-t border-stone-800 flex items-center justify-between gap-2">
+          @if (pwaService.notificationStatus() !== 'unsupported' && pwaService.notificationStatus() !== 'granted') {
+            <button
+              type="button"
+              (click)="enableNotificationAlerts()"
+              class="py-2 px-3 rounded-xl text-xs font-medium bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 flex items-center gap-1"
+            >
+              <mat-icon style="font-size: 15px;">notifications</mat-icon>
+              <span>Enable Alerts</span>
+            </button>
+          } @else {
+            <span></span>
+          }
+
+          <button
+            type="button"
+            (click)="pwaService.closeInstallGuide()"
+            class="py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Offline Connectivity Indicator -->
+  @if (!pwaService.isOnline()) {
+    <div
+      class="fixed bottom-16 left-4 z-50 bg-stone-900 border border-amber-500/40 text-amber-300 px-3.5 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs font-medium"
+    >
+      <mat-icon style="font-size: 16px;">cloud_off</mat-icon>
+      <span>Offline mode — changes save locally.</span>
     </div>
   }
 

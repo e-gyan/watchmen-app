@@ -7,6 +7,7 @@ import {
 import express from 'express';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { deflateSync } from 'node:zlib';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
@@ -14,6 +15,118 @@ const app = express();
 const angularApp = new AngularNodeAppEngine();
 
 app.use(express.json());
+
+/**
+ * Generates a valid binary RGBA PNG buffer of exact width x height with the Watchman
+ * dark stone (#0c0a09) background and warm amber (#f59e0b) emblem in the safe zone.
+ */
+const pngCache = new Map<string, Buffer>();
+
+function crc32(buf: Buffer): number {
+  let c = 0xffffffff;
+  for (const byte of buf) {
+    c ^= byte;
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function makePngChunk(type: string, data: Buffer): Buffer {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length, 0);
+  const typeBuf = Buffer.from(type, 'ascii');
+  const crcVal = crc32(Buffer.concat([typeBuf, data]));
+  const crcBuf = Buffer.alloc(4);
+  crcBuf.writeUInt32BE(crcVal, 0);
+  return Buffer.concat([len, typeBuf, data, crcBuf]);
+}
+
+function generateWatchmanPng(size: number, maskable = false): Buffer {
+  const cacheKey = `${size}-${maskable ? 'm' : 'a'}`;
+  const existing = pngCache.get(cacheKey);
+  if (existing) return existing;
+
+  const raw = Buffer.alloc(size * (size * 4 + 1));
+  const cx = size / 2;
+  const cy = size / 2;
+  const outerR = size * (maskable ? 0.34 : 0.38);
+  const innerR = size * (maskable ? 0.16 : 0.19);
+
+  for (let y = 0; y < size; y++) {
+    const rowStart = y * (size * 4 + 1);
+    raw[rowStart] = 0; // filter type 0
+    for (let x = 0; x < size; x++) {
+      const px = rowStart + 1 + x * 4;
+      const dx = x - cx;
+      const dy = y - cy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      // Default dark background #0c0a09
+      let r = 12;
+      let g = 10;
+      let b = 9;
+
+      if (dist <= outerR) {
+        // Warm inner surface #1c1917
+        r = 28;
+        g = 25;
+        b = 23;
+      }
+
+      // Outer ring accent (#f59e0b)
+      if (Math.abs(dist - outerR) <= Math.max(2, size * 0.018)) {
+        r = 245;
+        g = 158;
+        b = 11;
+      }
+
+      // Sacred flame / beacon diamond-teardrop in center (#f59e0b & #fbbf24)
+      const normX = Math.abs(dx) / innerR;
+      const normY = (dy + innerR * 0.25) / (innerR * 1.35);
+      if (normY >= -0.9 && normY <= 0.85) {
+        const halfWidth = normY < 0 ? (0.9 + normY) * 0.85 : Math.sqrt(Math.max(0, 1 - normY * normY)) * 0.78;
+        if (normX <= halfWidth) {
+          if (normX <= halfWidth * 0.48 && normY > -0.2) {
+            r = 254;
+            g = 243;
+            b = 199;
+          } else {
+            r = 245;
+            g = 158;
+            b = 11;
+          }
+        }
+      }
+
+      raw[px] = r;
+      raw[px + 1] = g;
+      raw[px + 2] = b;
+      raw[px + 3] = 255;
+    }
+  }
+
+  const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // RGBA
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+
+  const idat = deflateSync(raw);
+  const out = Buffer.concat([
+    signature,
+    makePngChunk('IHDR', ihdr),
+    makePngChunk('IDAT', idat),
+    makePngChunk('IEND', Buffer.alloc(0)),
+  ]);
+  pngCache.set(cacheKey, out);
+  return out;
+}
 
 const dataDir = join(process.cwd(), '.data');
 const storeFile = join(dataDir, 'watchman-cloud-store.json');
@@ -81,6 +194,37 @@ app.use((_req, res, next) => {
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   next();
+});
+
+/**
+ * PWA Icon & Manifest Routes for Android Chrome & iOS Safari Installability
+ */
+app.get('/pwa-192x192.png', (_req, res) => {
+  const buf = generateWatchmanPng(192, false);
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.send(buf);
+});
+
+app.get('/pwa-512x512.png', (_req, res) => {
+  const buf = generateWatchmanPng(512, false);
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.send(buf);
+});
+
+app.get('/pwa-maskable-512x512.png', (_req, res) => {
+  const buf = generateWatchmanPng(512, true);
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.send(buf);
+});
+
+app.get('/apple-touch-icon.png', (_req, res) => {
+  const buf = generateWatchmanPng(180, false);
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.send(buf);
 });
 
 /**
@@ -195,16 +339,22 @@ async function fetchLatestMarketFxRates(): Promise<FxSnapshot> {
   return cachedFx;
 }
 
-// Start background real-time market FX listener (syncs immediately and every 30s)
-fetchLatestMarketFxRates().catch(() => undefined);
-const fxInterval = setInterval(() => {
+let fxPollerStarted = false;
+
+function ensureFxPollerStarted(): void {
+  if (fxPollerStarted) return;
+  fxPollerStarted = true;
   fetchLatestMarketFxRates().catch(() => undefined);
-}, 30 * 1000);
-if (typeof fxInterval.unref === 'function') {
-  fxInterval.unref();
+  const fxInterval = setInterval(() => {
+    fetchLatestMarketFxRates().catch(() => undefined);
+  }, 30 * 1000);
+  if (typeof fxInterval.unref === 'function') {
+    fxInterval.unref();
+  }
 }
 
 app.get('/api/fx-rates', async (req, res) => {
+  ensureFxPollerStarted();
   const force = req.query['force'] === '1' || req.query['force'] === 'true';
   const now = Date.now();
   if (force || cachedFx.source !== 'live' || now - cachedFx.fetchedAtMs > 15 * 1000) {
@@ -217,6 +367,7 @@ app.get('/api/fx-rates', async (req, res) => {
  * Real-Time SSE Stream for Market Currency Rates (/api/fx-stream)
  */
 app.get('/api/fx-stream', (req, res) => {
+  ensureFxPollerStarted();
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
