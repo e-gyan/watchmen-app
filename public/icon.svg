@@ -1,14 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <rect width="512" height="512" rx="112" fill="#0c0a09" />
-  <circle cx="256" cy="256" r="184" fill="#1c1917" stroke="#f59e0b" stroke-width="8" stroke-opacity="0.35" />
+  <defs>
+    <linearGradient id="bgWarm" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fffbeb" />
+      <stop offset="100%" stop-color="#fef3c7" />
+    </linearGradient>
+    <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24" />
+      <stop offset="100%" stop-color="#d97706" />
+    </linearGradient>
+    <linearGradient id="flameOuter" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="40%" stop-color="#fef3c7" />
+      <stop offset="100%" stop-color="#fde68a" />
+    </linearGradient>
+  </defs>
+  <!-- Warm Amber-Cream Outer Surface (Eliminates black splash screen) -->
+  <rect width="512" height="512" rx="116" fill="url(#bgWarm)" />
+  <!-- Rounded Watchman Header Badge Container -->
+  <rect x="56" y="56" width="400" height="400" rx="92" fill="url(#badgeGrad)" stroke="#f59e0b" stroke-width="8" />
+  <!-- Watchman Flame Icon (Matches local_fire_department next to WATCHMAN brand) -->
   <path
-    d="M256 108c-22 38-76 84-76 148 0 44.2 34.1 80 76 80s76-35.8 76-80c0-64-54-110-76-148zm0 196c-22.1 0-40-17.9-40-40 0-27 22-54 40-78 18 24 40 51 40 78 0 22.1-17.9 40-40 40z"
-    fill="#f59e0b"
+    d="M274 108c10 38-8 66-28 88-22 24-42 47-42 82 0 38 30 68 68 68s68-30 68-68c0-26-13-52-33-72 6 24-6 44-23 50-4-28-23-50-22-82 0-23 5-45 12-66zm-18 284c-64 0-116-50-116-114 0-48 29-85 62-116 9 28 29 44 29 44-12-42 6-86 43-114 4 38 28 66 53 92 29 30 45 62 45 94 0 64-52 114-116 114z"
+    fill="url(#flameOuter)"
   />
+  <!-- Inner Flame Core -->
   <path
-    d="M176 376h160"
-    stroke="#fbbf24"
-    stroke-width="14"
-    stroke-linecap="round"
+    d="M256 364c-28 0-50-21-50-48 0-22 14-38 32-54 11 12 22 25 26 42 10-8 16-20 16-34 16 14 26 30 26 46 0 27-22 48-50 48z"
+    fill="#d97706"
   />
 </svg>

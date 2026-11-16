@@ -8,7 +8,7 @@
     <meta name="theme-color" content="#f59e0b" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Watchman" />
     <meta name="description" content="An analytical prayer accountability tracker for partners to log prayer hours and minutes against daily, weekly, and period targets (e.g. 100 hours), document prayer sessions, and keep a testimony record." />
     <meta property="og:title" content="Watchman - Partner Prayer & Testimony Tracker" />
@@ -26,17 +26,20 @@
     <script>
       (function() {
         try {
-          var t = localStorage.getItem('watchman_theme');
-          if (t === 'light') {
-            document.documentElement.classList.add('light');
-          } else {
-            document.documentElement.classList.add('dark');
-          }
-        } catch (e) {}
+          var pref = localStorage.getItem('watchman_theme_pref');
+          var now = new Date();
+          var mins = now.getHours() * 60 + now.getMinutes();
+          var scheduled = (mins >= 405 && mins < 1125) ? 'light' : 'dark';
+          var mode = (pref === 'light' || pref === 'dark') ? pref : scheduled;
+          document.documentElement.classList.remove('light', 'dark');
+          document.documentElement.classList.add(mode);
+        } catch (e) {
+          document.documentElement.classList.add('light');
+        }
       })();
     </script>
   </head>
-  <body class="bg-stone-900 text-stone-100 antialiased font-sans selection:bg-amber-500/30 selection:text-amber-200">
+  <body class="antialiased font-sans selection:bg-amber-500/30 selection:text-amber-200">
     <app-root></app-root>
   </body>
 </html>

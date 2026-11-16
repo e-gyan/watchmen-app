@@ -11,7 +11,7 @@ import {
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { FirebaseService } from '../services/firebase.service';
-import { PRAYER_CATEGORIES, PrayerCategoryDef, PrayerSession } from '../models/prayer.model';
+import { CATEGORY_COLOR_PALETTE, PrayerSession } from '../models/prayer.model';
 
 @Component({
   selector: 'app-log-session-modal',
@@ -24,7 +24,7 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, PrayerSession } from '../models/p
       aria-modal="true"
     >
       <div
-        class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-7 space-y-5 transition-all"
+        class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-7 space-y-5 modal-pop-in"
         [class]="isQuickTimeMode() ? 'max-w-md' : 'max-w-xl'"
       >
         <!-- Modal Header -->
@@ -80,11 +80,10 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, PrayerSession } from '../models/p
           <!-- Mode: Individual or Partner -->
           <div>
             <span class="block text-xs font-medium text-stone-300 mb-2">
-              Prayer Mode (Individual or Partner)
+              Prayer Mode
             </span>
 
             <div class="grid grid-cols-2 gap-2.5">
-              <!-- Individual Option -->
               <button
                 type="button"
                 (click)="setParticipant(currentUserName(), false)"
@@ -99,7 +98,6 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, PrayerSession } from '../models/p
                 <span>Individual ({{ currentUserName() }})</span>
               </button>
 
-              <!-- Partner / Agreement Option -->
               <button
                 type="button"
                 (click)="setParticipant('Circle Agreement', true)"
@@ -150,7 +148,6 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, PrayerSession } from '../models/p
 
           <!-- Date & Duration row -->
           <div class="grid grid-cols-1 gap-4" [class]="isQuickTimeMode() ? 'sm:grid-cols-1' : 'sm:grid-cols-3'">
-            <!-- Date (Hidden in Quick Time Mode to focus strictly on Hours/Minutes + Individual/Partner) -->
             @if (!isQuickTimeMode()) {
               <div class="sm:col-span-1">
                 <label for="pDate" class="block text-xs font-medium text-stone-300 mb-1.5">Date</label>
@@ -201,53 +198,97 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, PrayerSession } from '../models/p
               <button
                 type="button"
                 (click)="setPreset(preset.h, preset.m)"
-                class="text-xs py-1 px-2.5 rounded-lg bg-stone-800 text-stone-300 hover:bg-stone-700 hover:text-stone-100 transition-colors"
+                class="text-xs py-1 px-2.5 rounded-lg bg-stone-800 text-stone-300 hover:bg-stone-700 hover:text-stone-100 transition-colors font-mono tabular-nums"
               >
                 {{ preset.label }}
               </button>
             }
           </div>
 
-          <!-- Extended Details: Only shown if no prayer recorded yet for this day, or when editing/expanded -->
+          <!-- Extended Details -->
           @if (!isQuickTimeMode()) {
-            <!-- Multiple Category Selection -->
-            <div>
-              <div class="flex items-center justify-between mb-2">
+            <!-- Custom User Category Setup -->
+            <div class="space-y-2.5 p-3.5 rounded-xl bg-stone-950/70 border border-stone-800">
+              <div class="flex items-center justify-between">
                 <span class="block text-xs font-medium text-stone-300">
-                  Categories
+                  Your Categories
                 </span>
-                <span class="text-[11px] text-amber-400 font-mono">
+                <span class="text-[11px] text-amber-400 font-mono tabular-nums">
                   {{ selectedCategories().length }} selected
                 </span>
               </div>
 
-              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                @for (cat of categories; track cat.name) {
-                  <button
-                    type="button"
-                    (click)="toggleCategory(cat.name)"
-                    class="flex items-center gap-2 p-2 rounded-xl border text-left text-xs transition-all relative overflow-hidden"
-                    [class]="
-                      isCategorySelected(cat.name)
-                        ? 'bg-stone-800/90 border-amber-500 text-stone-100 font-medium shadow-xs'
-                        : 'bg-stone-950/60 border-stone-800/80 text-stone-400 hover:border-stone-700 hover:text-stone-200'
-                    "
-                  >
-                    <mat-icon
-                      [style.color]="cat.color"
-                      style="font-size: 16px; width: 16px; height: 16px;"
-                    >
-                      {{ cat.icon }}
-                    </mat-icon>
-                    <span class="truncate flex-1">{{ cat.name }}</span>
-                    @if (isCategorySelected(cat.name)) {
-                      <mat-icon style="font-size: 14px; width: 14px; height: 14px;" class="text-amber-400 shrink-0">
-                        check_circle
-                      </mat-icon>
-                    }
-                  </button>
-                }
+              <!-- Add New Custom Category Input -->
+              <div class="flex items-center gap-2">
+                <input
+                  type="text"
+                  [value]="newCategoryName()"
+                  (input)="newCategoryName.set($any($event.target).value)"
+                  (keydown.enter)="$event.preventDefault(); addNewCategory()"
+                  placeholder="Create your category (e.g. Morning Watch, Family)..."
+                  class="flex-1 bg-stone-900 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                />
+                <div class="flex items-center gap-1">
+                  @for (c of colorOptions; track c) {
+                    <button
+                      type="button"
+                      (click)="newCategoryColor.set(c)"
+                      class="w-4 h-4 rounded-full border transition-transform"
+                      [style.background-color]="c"
+                      [class]="newCategoryColor() === c ? 'scale-125 border-white' : 'border-transparent opacity-70'"
+                      title="Pick category color"
+                    ></button>
+                  }
+                </div>
+                <button
+                  type="button"
+                  (click)="addNewCategory()"
+                  class="flex items-center gap-1 py-2 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold shrink-0"
+                >
+                  <mat-icon style="font-size: 15px;">add</mat-icon>
+                  <span>Add</span>
+                </button>
               </div>
+
+              <!-- User's Custom Categories List -->
+              @if (userCategories().length === 0) {
+                <p class="text-[11px] text-stone-500">
+                  No categories set up yet. Type a category name above and tap Add.
+                </p>
+              } @else {
+                <div class="flex flex-wrap gap-1.5 pt-1">
+                  @for (cat of userCategories(); track cat.name) {
+                    <div
+                      class="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-xl border text-xs transition-all"
+                      [class]="
+                        isCategorySelected(cat.name)
+                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold'
+                          : 'bg-stone-900 border-stone-800 text-stone-300 hover:border-stone-700'
+                      "
+                    >
+                      <button
+                        type="button"
+                        (click)="toggleCategory(cat.name)"
+                        class="flex items-center gap-1.5 text-left"
+                      >
+                        <span
+                          class="w-2 h-2 rounded-full shrink-0"
+                          [style.background-color]="cat.color"
+                        ></span>
+                        <span>{{ cat.name }}</span>
+                      </button>
+                      <button
+                        type="button"
+                        (click)="removeCategory(cat.name)"
+                        class="p-0.5 rounded text-stone-500 hover:text-red-400 transition-colors"
+                        title="Remove category"
+                      >
+                        <mat-icon style="font-size: 12px; width: 12px; height: 12px;">close</mat-icon>
+                      </button>
+                    </div>
+                  }
+                </div>
+              }
             </div>
 
             <!-- Topics & Scripture on a clean 2-col row -->
@@ -279,7 +320,7 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, PrayerSession } from '../models/p
               </div>
             </div>
 
-            <!-- Session Notes: What was prayed about? -->
+            <!-- Session Notes -->
             <div>
               <label for="pNotes" class="block text-xs font-medium text-stone-300 mb-1">
                 Prayer Focus / Notes
@@ -306,7 +347,7 @@ import { PRAYER_CATEGORIES, PrayerCategoryDef, PrayerSession } from '../models/p
 
             <button
               type="submit"
-              [disabled]="isSubmitting() || (!isQuickTimeMode() && selectedCategories().length === 0)"
+              [disabled]="isSubmitting()"
               class="flex items-center gap-1.5 py-2.5 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 disabled:pointer-events-none transition-all shadow-md"
             >
               <mat-icon style="font-size: 18px;">{{ sessionToEdit() ? 'save' : 'done_all' }}</mat-icon>
@@ -332,8 +373,11 @@ export class LogSessionModal implements OnInit {
   readonly showFullFormOverride = signal(false);
   readonly selectedDate = signal<string>(new Date().toISOString().split('T')[0]);
 
-  readonly categories: PrayerCategoryDef[] = PRAYER_CATEGORIES;
-  readonly selectedCategories = signal<string[]>(['Adoration & Praise']);
+  readonly userCategories = this.firebaseService.userCategories;
+  readonly selectedCategories = signal<string[]>([]);
+  readonly newCategoryName = signal<string>('');
+  readonly colorOptions = CATEGORY_COLOR_PALETTE.slice(0, 5);
+  readonly newCategoryColor = signal<string>(CATEGORY_COLOR_PALETTE[0]);
 
   readonly presets = [
     { label: '15m', h: 0, m: 15 },
@@ -344,7 +388,6 @@ export class LogSessionModal implements OnInit {
     { label: '2h', h: 2, m: 0 },
   ];
 
-  // Sessions already recorded for the selected date
   readonly existingSessionsForDate = computed(() => {
     const d = this.selectedDate();
     return this.firebaseService.sessions().filter((s) => s.date === d);
@@ -355,7 +398,6 @@ export class LogSessionModal implements OnInit {
     return this.firebaseService.formatMinutes(total);
   });
 
-  // When a prayer is already recorded for the day (and not editing), show only Hours/Minutes + Individual/Partner
   readonly isQuickTimeMode = computed(() => {
     if (this.sessionToEdit()) return false;
     if (this.showFullFormOverride()) return false;
@@ -417,9 +459,12 @@ export class LogSessionModal implements OnInit {
       });
       this.selectedDate.set(edit.date);
 
-      const cats = edit.categories && edit.categories.length > 0
-        ? edit.categories
-        : [edit.category || 'Adoration & Praise'];
+      const cats =
+        edit.categories && edit.categories.length > 0
+          ? edit.categories
+          : edit.category
+            ? [edit.category]
+            : [];
       this.selectedCategories.set(cats);
     } else {
       const initMins = this.initialMinutes();
@@ -434,6 +479,11 @@ export class LogSessionModal implements OnInit {
         this.selectedDate.set(targetDate);
       }
       this.form.patchValue({ participantName: this.currentUserName() });
+
+      const currentCats = this.userCategories();
+      if (currentCats.length > 0) {
+        this.selectedCategories.set([currentCats[0].name]);
+      }
     }
   }
 
@@ -443,6 +493,27 @@ export class LogSessionModal implements OnInit {
     }
   }
 
+  async addNewCategory() {
+    const name = this.newCategoryName().trim();
+    if (!name) return;
+    const created = await this.firebaseService.addCustomCategory(
+      name,
+      this.newCategoryColor()
+    );
+    if (created) {
+      const curr = this.selectedCategories();
+      if (!curr.includes(created.name)) {
+        this.selectedCategories.set([...curr, created.name]);
+      }
+      this.newCategoryName.set('');
+    }
+  }
+
+  async removeCategory(name: string) {
+    await this.firebaseService.removeCustomCategory(name);
+    this.selectedCategories.set(this.selectedCategories().filter((c) => c !== name));
+  }
+
   isCategorySelected(name: string): boolean {
     return this.selectedCategories().includes(name);
   }
@@ -450,9 +521,7 @@ export class LogSessionModal implements OnInit {
   toggleCategory(name: string) {
     const current = this.selectedCategories();
     if (current.includes(name)) {
-      if (current.length > 1) {
-        this.selectedCategories.set(current.filter((c) => c !== name));
-      }
+      this.selectedCategories.set(current.filter((c) => c !== name));
     } else {
       this.selectedCategories.set([...current, name]);
     }
@@ -474,15 +543,24 @@ export class LogSessionModal implements OnInit {
     const durationMins = val.hours * 60 + val.minutes;
     if (durationMins <= 0) return;
 
+    // If user typed a category name in the input without clicking Add, auto-create and select it
+    const pendingCat = this.newCategoryName().trim();
+    if (pendingCat) {
+      await this.addNewCategory();
+    }
+
     const existing = this.existingSessionsForDate();
-    const cats =
+    let cats =
       this.isQuickTimeMode() && existing.length > 0
         ? existing[0].categories && existing[0].categories.length > 0
           ? existing[0].categories
-          : [existing[0].category || 'Adoration & Praise']
+          : [existing[0].category || 'Prayer']
         : this.selectedCategories();
 
-    if (cats.length === 0) return;
+    if (cats.length === 0) {
+      const userCats = this.userCategories();
+      cats = userCats.length > 0 ? [userCats[0].name] : ['Prayer'];
+    }
 
     this.isSubmitting.set(true);
 

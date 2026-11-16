@@ -81,175 +81,6 @@ import { MessageListeningRecord } from '../models/prayer.model';
         </div>
       </div>
 
-      <!-- Inline Log / Edit Form Card -->
-      @if (showForm()) {
-        <div class="rounded-2xl bg-stone-900 border border-amber-500/40 p-5 sm:p-6 space-y-4 shadow-xl">
-          <div class="flex items-center justify-between border-b border-stone-800 pb-3">
-            <h2 class="text-base font-serif font-bold text-stone-100">
-              {{ editingMessage() ? 'Edit Message' : 'Log Message' }}
-            </h2>
-            <button
-              type="button"
-              (click)="closeForm()"
-              class="text-stone-400 hover:text-stone-100 p-1 rounded-lg hover:bg-stone-800"
-              aria-label="Close form"
-            >
-              <mat-icon style="font-size: 18px;">close</mat-icon>
-            </button>
-          </div>
-
-          <form [formGroup]="form" (ngSubmit)="submit()" class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <!-- Message Title -->
-              <div>
-                <label for="msgTitle" class="block text-xs font-medium text-stone-300 mb-1">
-                  Title
-                </label>
-                <input
-                  id="msgTitle"
-                  type="text"
-                  formControlName="title"
-                  placeholder="Message title"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <!-- Speaker / Minister (Optional) -->
-              <div>
-                <label for="msgSpeaker" class="block text-xs font-medium text-stone-300 mb-1">
-                  Speaker (optional)
-                </label>
-                <input
-                  id="msgSpeaker"
-                  type="text"
-                  formControlName="speaker"
-                  placeholder="Speaker"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-            </div>
-
-            <!-- Date & Duration (Hours / Minutes) + Mode -->
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label for="msgDate" class="block text-xs font-medium text-stone-300 mb-1">
-                  Date
-                </label>
-                <input
-                  id="msgDate"
-                  type="date"
-                  formControlName="date"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <span class="block text-xs font-medium text-stone-300 mb-1">
-                  Duration
-                </span>
-                <div class="grid grid-cols-2 gap-2">
-                  <div class="relative">
-                    <input
-                      type="number"
-                      min="0"
-                      max="24"
-                      formControlName="hours"
-                      aria-label="Hours spent listening"
-                      class="w-full bg-stone-950 border border-stone-800 rounded-xl px-2.5 py-2 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
-                    />
-                    <span class="absolute right-2.5 top-2 text-[11px] text-stone-500">hrs</span>
-                  </div>
-                  <div class="relative">
-                    <input
-                      type="number"
-                      min="0"
-                      max="59"
-                      formControlName="minutes"
-                      aria-label="Minutes spent listening"
-                      class="w-full bg-stone-950 border border-stone-800 rounded-xl px-2.5 py-2 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
-                    />
-                    <span class="absolute right-2.5 top-2 text-[11px] text-stone-500">mins</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Individual vs Partner -->
-              <div>
-                <span class="block text-xs font-medium text-stone-300 mb-1">
-                  Mode
-                </span>
-                <div class="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    (click)="form.controls.wasTogether.setValue(false)"
-                    class="py-2 px-2.5 rounded-xl border text-xs font-medium flex items-center justify-center gap-1 transition-all"
-                    [class]="
-                      !form.controls.wasTogether.value
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-semibold'
-                        : 'bg-stone-950 border-stone-800 text-stone-400'
-                    "
-                  >
-                    <mat-icon style="font-size: 15px;">person</mat-icon>
-                    <span>Individual</span>
-                  </button>
-                  <button
-                    type="button"
-                    (click)="form.controls.wasTogether.setValue(true)"
-                    class="py-2 px-2.5 rounded-xl border text-xs font-medium flex items-center justify-center gap-1 transition-all"
-                    [class]="
-                      form.controls.wasTogether.value
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-semibold'
-                        : 'bg-stone-950 border-stone-800 text-stone-400'
-                    "
-                  >
-                    <mat-icon style="font-size: 15px;">groups</mat-icon>
-                    <span>Partner</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- Key Takeaway / Note -->
-            <div>
-              <label for="msgNotes" class="block text-xs font-medium text-stone-300 mb-1">
-                Note (optional)
-              </label>
-              <textarea
-                id="msgNotes"
-                rows="2"
-                formControlName="notes"
-                placeholder="Brief takeaway"
-                class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-              ></textarea>
-            </div>
-
-            @if (errorMsg()) {
-              <div class="p-2.5 rounded-xl bg-red-950/60 border border-red-800 text-xs text-red-300">
-                {{ errorMsg() }}
-              </div>
-            }
-
-            <div class="flex items-center justify-end gap-2 pt-2 border-t border-stone-800">
-              <button
-                type="button"
-                (click)="closeForm()"
-                class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                [disabled]="isSaving()"
-                class="flex items-center gap-1.5 py-2 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 shadow-md"
-              >
-                <mat-icon style="font-size: 16px;">check</mat-icon>
-                <span>{{ isSaving() ? 'Saving...' : (editingMessage() ? 'Update' : 'Save') }}</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      }
-
       <!-- Filter & Sort Bar -->
       @if (firebaseService.messages().length > 0) {
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
@@ -363,14 +194,14 @@ import { MessageListeningRecord } from '../models/prayer.model';
                   }
                 </div>
 
-                <!-- Action Buttons: Repeat Initial Time, Add More Time, Edit, Delete -->
+                <!-- Action Buttons: Open Add/Repeat Time Pop-Up, Edit Pop-Up, Delete -->
                 <div class="flex flex-wrap items-center gap-1.5 shrink-0 self-end sm:self-center">
                   <button
                     type="button"
                     [disabled]="isSaving()"
                     (click)="repeatInitialTime(msg)"
                     class="flex items-center gap-1 py-1.5 px-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors disabled:opacity-50"
-                    title="Repeat initial recorded listening time and add to total"
+                    title="Repeat initial recorded listening time"
                   >
                     <mat-icon style="font-size: 15px;">replay</mat-icon>
                     <span>Repeat (+{{ firebaseService.formatMinutes(baseMins) }})</span>
@@ -378,13 +209,8 @@ import { MessageListeningRecord } from '../models/prayer.model';
 
                   <button
                     type="button"
-                    (click)="toggleAddTimePanel(msg.id)"
-                    class="flex items-center gap-1 py-1.5 px-2.5 rounded-xl border text-xs font-semibold transition-colors"
-                    [class]="
-                      addingTimeForId() === msg.id
-                        ? 'bg-emerald-500 text-stone-950 border-emerald-500'
-                        : 'bg-stone-800 hover:bg-stone-700 text-stone-200 border-stone-700'
-                    "
+                    (click)="openAddTimeModal(msg)"
+                    class="flex items-center gap-1 py-1.5 px-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 text-xs font-semibold transition-colors"
                     title="Add more listening time to this message"
                   >
                     <mat-icon style="font-size: 15px;">more_time</mat-icon>
@@ -409,60 +235,294 @@ import { MessageListeningRecord } from '../models/prayer.model';
                   </button>
                 </div>
               </div>
+            </div>
+          }
+        </div>
+      }
 
-              <!-- Inline Add More Time Panel for this Message -->
-              @if (addingTimeForId() === msg.id) {
-                <div class="pt-3 border-t border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-950/70 p-3 rounded-xl">
-                  <div class="text-xs text-stone-300">
-                    <span class="font-semibold text-amber-400">Add More Listening Time</span>
-                    <span class="text-stone-400 ml-1">
-                      (Current total: {{ firebaseService.formatMinutes(msg.durationMinutes) }})
-                    </span>
-                  </div>
+      <!-- POP-UP MODAL 1: Log / Edit Message -->
+      @if (showForm()) {
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-5"
+          >
+            <div class="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div>
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-amber-500">
+                  Word Intake
+                </span>
+                <h2 class="text-lg font-serif font-bold text-stone-100">
+                  {{ editingMessage() ? 'Edit Message' : 'Log Message' }}
+                </h2>
+              </div>
+              <button
+                type="button"
+                (click)="closeForm()"
+                class="text-stone-400 hover:text-stone-100 p-1.5 rounded-lg hover:bg-stone-800"
+                aria-label="Close modal"
+              >
+                <mat-icon style="font-size: 18px;">close</mat-icon>
+              </button>
+            </div>
 
-                  <form [formGroup]="addTimeForm" (ngSubmit)="submitAddedTime(msg)" class="flex flex-wrap items-center gap-2">
-                    <div class="relative w-20">
+            <form [formGroup]="form" (ngSubmit)="submit()" class="space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="msgTitle" class="block text-xs font-medium text-stone-300 mb-1">
+                    Title
+                  </label>
+                  <input
+                    id="msgTitle"
+                    type="text"
+                    formControlName="title"
+                    placeholder="Message title"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label for="msgSpeaker" class="block text-xs font-medium text-stone-300 mb-1">
+                    Speaker (optional)
+                  </label>
+                  <input
+                    id="msgSpeaker"
+                    type="text"
+                    formControlName="speaker"
+                    placeholder="Speaker"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="msgDate" class="block text-xs font-medium text-stone-300 mb-1">
+                    Date
+                  </label>
+                  <input
+                    id="msgDate"
+                    type="date"
+                    formControlName="date"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <span class="block text-xs font-medium text-stone-300 mb-1">
+                    Duration
+                  </span>
+                  <div class="grid grid-cols-2 gap-2">
+                    <div class="relative">
                       <input
                         type="number"
                         min="0"
                         max="24"
                         formControlName="hours"
-                        aria-label="Additional hours"
-                        class="w-full bg-stone-900 border border-stone-700 rounded-lg px-2 py-1.5 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
+                        aria-label="Hours spent listening"
+                        class="w-full bg-stone-950 border border-stone-800 rounded-xl px-2.5 py-2 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
                       />
-                      <span class="absolute right-2 top-1.5 text-[10px] text-stone-400">hrs</span>
+                      <span class="absolute right-2.5 top-2 text-[11px] text-stone-500">hrs</span>
                     </div>
-                    <div class="relative w-20">
+                    <div class="relative">
                       <input
                         type="number"
                         min="0"
                         max="59"
                         formControlName="minutes"
-                        aria-label="Additional minutes"
-                        class="w-full bg-stone-900 border border-stone-700 rounded-lg px-2 py-1.5 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
+                        aria-label="Minutes spent listening"
+                        class="w-full bg-stone-950 border border-stone-800 rounded-xl px-2.5 py-2 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
                       />
-                      <span class="absolute right-2 top-1.5 text-[10px] text-stone-400">mins</span>
+                      <span class="absolute right-2.5 top-2 text-[11px] text-stone-500">mins</span>
                     </div>
-                    <button
-                      type="submit"
-                      [disabled]="isSaving()"
-                      class="flex items-center gap-1 py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-xs font-semibold disabled:opacity-50"
-                    >
-                      <mat-icon style="font-size: 14px;">check</mat-icon>
-                      <span>Add to Total</span>
-                    </button>
-                    <button
-                      type="button"
-                      (click)="addingTimeForId.set(null)"
-                      class="py-1.5 px-2.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs"
-                    >
-                      Cancel
-                    </button>
-                  </form>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <span class="block text-xs font-medium text-stone-300 mb-1">
+                  Mode
+                </span>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    (click)="form.controls.wasTogether.setValue(false)"
+                    class="py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                    [class]="
+                      !form.controls.wasTogether.value
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-semibold'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    "
+                  >
+                    <mat-icon style="font-size: 15px;">person</mat-icon>
+                    <span>Individual</span>
+                  </button>
+                  <button
+                    type="button"
+                    (click)="form.controls.wasTogether.setValue(true)"
+                    class="py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                    [class]="
+                      form.controls.wasTogether.value
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-semibold'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    "
+                  >
+                    <mat-icon style="font-size: 15px;">groups</mat-icon>
+                    <span>Partner</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label for="msgNotes" class="block text-xs font-medium text-stone-300 mb-1">
+                  Note (optional)
+                </label>
+                <textarea
+                  id="msgNotes"
+                  rows="2"
+                  formControlName="notes"
+                  placeholder="Brief takeaway"
+                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                ></textarea>
+              </div>
+
+              @if (errorMsg()) {
+                <div class="p-2.5 rounded-xl bg-red-950/60 border border-red-800 text-xs text-red-300">
+                  {{ errorMsg() }}
                 </div>
               }
+
+              <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-800">
+                <button
+                  type="button"
+                  (click)="closeForm()"
+                  class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  [disabled]="isSaving()"
+                  class="flex items-center gap-1.5 py-2 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 shadow-md"
+                >
+                  <mat-icon style="font-size: 16px;">check</mat-icon>
+                  <span>{{ isSaving() ? 'Saving...' : (editingMessage() ? 'Update' : 'Save') }}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      }
+
+      <!-- POP-UP MODAL 2: Add More Time / Repeat Message -->
+      @if (addingTimeMessage(); as targetMsg) {
+        @let baseMins = targetMsg.initialDurationMinutes || targetMsg.durationMinutes;
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-5"
+          >
+            <div class="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div>
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
+                  Add Listening Time
+                </span>
+                <h2 class="text-base font-serif font-bold text-stone-100 truncate">
+                  {{ targetMsg.title }}
+                </h2>
+              </div>
+              <button
+                type="button"
+                (click)="addingTimeMessage.set(null)"
+                class="text-stone-400 hover:text-stone-100 p-1.5 rounded-lg hover:bg-stone-800"
+                aria-label="Close modal"
+              >
+                <mat-icon style="font-size: 18px;">close</mat-icon>
+              </button>
             </div>
-          }
+
+            <div class="p-3 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between text-xs">
+              <span class="text-stone-400">Current Total</span>
+              <span class="font-mono font-bold text-amber-400 tabular-nums">
+                {{ firebaseService.formatMinutes(targetMsg.durationMinutes) }}
+                ({{ firebaseService.formatInteger(targetMsg.listenCount || 1) }}x)
+              </span>
+            </div>
+
+            <!-- Quick Repeat Initial Duration Button -->
+            <button
+              type="button"
+              [disabled]="isSaving()"
+              (click)="repeatInitialTime(targetMsg)"
+              class="w-full py-2.5 px-4 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+            >
+              <mat-icon style="font-size: 16px;">replay</mat-icon>
+              <span>Repeat Initial Duration (+{{ firebaseService.formatMinutes(baseMins) }})</span>
+            </button>
+
+            <div class="relative flex py-1 items-center">
+              <div class="flex-grow border-t border-stone-800"></div>
+              <span class="flex-shrink mx-3 text-[10px] uppercase tracking-wider text-stone-500">Or Custom Time</span>
+              <div class="flex-grow border-t border-stone-800"></div>
+            </div>
+
+            <form [formGroup]="addTimeForm" (ngSubmit)="submitAddedTime(targetMsg)" class="space-y-4">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="addHrs" class="block text-xs font-medium text-stone-300 mb-1">Hours</label>
+                  <div class="relative">
+                    <input
+                      id="addHrs"
+                      type="number"
+                      min="0"
+                      max="24"
+                      formControlName="hours"
+                      class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
+                    />
+                    <span class="absolute right-3 top-2 text-[11px] text-stone-500">hrs</span>
+                  </div>
+                </div>
+                <div>
+                  <label for="addMins" class="block text-xs font-medium text-stone-300 mb-1">Minutes</label>
+                  <div class="relative">
+                    <input
+                      id="addMins"
+                      type="number"
+                      min="0"
+                      max="59"
+                      formControlName="minutes"
+                      class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
+                    />
+                    <span class="absolute right-3 top-2 text-[11px] text-stone-500">mins</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-800">
+                <button
+                  type="button"
+                  (click)="addingTimeMessage.set(null)"
+                  class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  [disabled]="isSaving()"
+                  class="flex items-center gap-1.5 py-2 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-xs font-semibold disabled:opacity-50 shadow-md"
+                >
+                  <mat-icon style="font-size: 16px;">check</mat-icon>
+                  <span>Add to Total</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       }
     </div>
@@ -476,7 +536,7 @@ export class MessagesTracker {
   readonly isSaving = signal(false);
   readonly errorMsg = signal<string | null>(null);
   readonly editingMessage = signal<MessageListeningRecord | null>(null);
-  readonly addingTimeForId = signal<string | null>(null);
+  readonly addingTimeMessage = signal<MessageListeningRecord | null>(null);
 
   // Filter & Sort state
   readonly searchQuery = signal('');
@@ -543,7 +603,6 @@ export class MessagesTracker {
       if (sort === 'mostListened') {
         return (Number(b.listenCount) || 1) - (Number(a.listenCount) || 1);
       }
-      // Default: 'newest'
       return (
         (b.date || '').localeCompare(a.date || '') ||
         (b.createdAt || '').localeCompare(a.createdAt || '') ||
@@ -574,7 +633,7 @@ export class MessagesTracker {
 
   openForm() {
     this.editingMessage.set(null);
-    this.addingTimeForId.set(null);
+    this.addingTimeMessage.set(null);
     this.errorMsg.set(null);
     this.form.reset({
       title: '',
@@ -590,7 +649,7 @@ export class MessagesTracker {
 
   editRecord(msg: MessageListeningRecord) {
     this.editingMessage.set(msg);
-    this.addingTimeForId.set(null);
+    this.addingTimeMessage.set(null);
     this.errorMsg.set(null);
     const hrs = Math.floor((msg.durationMinutes || 0) / 60);
     const mins = Math.round((msg.durationMinutes || 0) % 60);
@@ -612,20 +671,21 @@ export class MessagesTracker {
     this.errorMsg.set(null);
   }
 
-  toggleAddTimePanel(msgId: string) {
-    if (this.addingTimeForId() === msgId) {
-      this.addingTimeForId.set(null);
-      return;
-    }
+  openAddTimeModal(msg: MessageListeningRecord) {
+    this.showForm.set(false);
     this.addTimeForm.reset({ hours: 0, minutes: 30 });
-    this.addingTimeForId.set(msgId);
+    this.addingTimeMessage.set(msg);
   }
 
   async repeatInitialTime(msg: MessageListeningRecord) {
-    const baseMins = Math.max(1, Number(msg.initialDurationMinutes) || Number(msg.durationMinutes) || 0);
+    const baseMins = Math.max(
+      1,
+      Number(msg.initialDurationMinutes) || Number(msg.durationMinutes) || 0
+    );
     this.isSaving.set(true);
     try {
       await this.firebaseService.addMoreTimeToMessage(msg, baseMins);
+      this.addingTimeMessage.set(null);
       this.saved.emit(
         `Repeated +${this.firebaseService.formatMinutes(baseMins)} for "${msg.title}"!`
       );
@@ -642,7 +702,7 @@ export class MessagesTracker {
     this.isSaving.set(true);
     try {
       await this.firebaseService.addMoreTimeToMessage(msg, addedMins);
-      this.addingTimeForId.set(null);
+      this.addingTimeMessage.set(null);
       this.saved.emit(
         `Added +${this.firebaseService.formatMinutes(addedMins)} to "${msg.title}"!`
       );
@@ -678,7 +738,7 @@ export class MessagesTracker {
           wasTogether: val.wasTogether,
           notes: val.notes.trim(),
         });
-        this.saved.emit('Message listening record updated!');
+        this.saved.emit('Message record updated.');
       } else {
         await this.firebaseService.addMessageRecord({
           title: val.title.trim(),
@@ -690,7 +750,7 @@ export class MessagesTracker {
           wasTogether: val.wasTogether,
           notes: val.notes.trim(),
         });
-        this.saved.emit('Message listening time logged!');
+        this.saved.emit('Message logged.');
       }
       this.isSaving.set(false);
       this.closeForm();
@@ -703,7 +763,7 @@ export class MessagesTracker {
   async deleteRecord(id: string) {
     try {
       await this.firebaseService.deleteMessageRecord(id);
-      this.saved.emit('Message record removed.');
+      this.saved.emit('Message removed.');
     } catch {
       // ignore
     }

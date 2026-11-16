@@ -1,17 +1,20 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  OnDestroy,
+  OnInit,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { ReactiveFormsModule } from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
 import { FirebaseService } from './services/firebase.service';
 import {
-  PRAYER_CATEGORIES,
+  AppTabId,
   PrayerRequest,
   PrayerSession,
   Testimony,
@@ -24,13 +27,14 @@ import { CreateCircleModal } from './components/create-circle-modal';
 import { AddPartnerModal } from './components/add-partner-modal';
 import { MessagesTracker } from './components/messages-tracker';
 import { SeedTracker } from './components/seed-tracker';
+import { AnalyticsTracker } from './components/analytics-tracker';
 import { Streak } from './components/streak';
 import { ThemeToggle } from './components/theme-toggle';
 import { AuthModal } from './components/auth-modal';
 import { ThemeService } from './services/theme.service';
 import { PwaService } from './services/pwa.service';
 
-export type AppTab = 'dashboard' | 'messages' | 'seeds' | 'journal' | 'testimonies' | 'covenant';
+export type AppTab = AppTabId;
 export type JournalGroupMode = 'day' | 'week' | 'month' | 'year' | 'custom' | 'all';
 
 export interface JournalRecordGroup {
@@ -42,6 +46,16 @@ export interface JournalRecordGroup {
   sessions: PrayerSession[];
   defaultDate?: string;
 }
+
+const TAB_ORDER: AppTab[] = [
+  'dashboard',
+  'messages',
+  'seeds',
+  'journal',
+  'analytics',
+  'testimonies',
+  'covenant',
+];
 
 @Component({
   selector: 'app-root',
@@ -58,23 +72,80 @@ export interface JournalRecordGroup {
     AddPartnerModal,
     MessagesTracker,
     SeedTracker,
+    AnalyticsTracker,
     Streak,
     ThemeToggle,
     AuthModal,
   ],
   templateUrl: './app.html',
   styleUrl: './app.css',
+  host: {
+    '(window:keydown)': 'onWindowKeydown($event)',
+  },
 })
-export class App {
+export class App implements OnInit, OnDestroy {
   readonly firebaseService = inject(FirebaseService);
   readonly themeService = inject(ThemeService);
   readonly pwaService = inject(PwaService);
   private http = inject(HttpClient);
 
-  // Active navigation tab
+  // Active navigation tab & directional slide animation state
   readonly activeTab = signal<AppTab>('dashboard');
+  readonly tabSlideDirection = signal<'next' | 'prev'>('next');
 
-  // Collapsible Header Menu state
+  // Backend-Driven Bottom Menu Bar Left/Right Sliding Track & Touch/Swipe State
+  readonly isSlideAnimating = signal<boolean>(false);
+  readonly isSwiping = signal<boolean>(false);
+  readonly swipeOffsetPx = signal<number>(0);
+  private slideAnimTimeout: ReturnType<typeof setTimeout> | null = null;
+  private touchStartX: number | null = null;
+  private touchStartY: number | null = null;
+  private touchLockedAxis: 'x' | 'y' | null = null;
+
+  // Computed index inside the backend-configured bottom menu bar (0..N-1, or -1 if sidebar-only tab)
+  readonly activeBottomIndex = computed(() => {
+    const tab = this.activeTab();
+    return this.firebaseService.bottomNavItems().findIndex((item) => item.id === tab);
+  });
+
+  readonly isBottomBarTab = computed(() => this.activeBottomIndex() >= 0);
+
+  readonly canSlidePrev = computed(() => {
+    const idx = this.activeBottomIndex();
+    return idx > 0;
+  });
+
+  readonly canSlideNext = computed(() => {
+    const idx = this.activeBottomIndex();
+    const total = this.firebaseService.bottomNavItems().length;
+    return idx >= 0 && idx < total - 1;
+  });
+
+  // Hardware-accelerated horizontal track transform for the bottom menu bar views
+  readonly carouselTrackTransform = computed(() => {
+    const idx = Math.max(0, this.activeBottomIndex());
+    const offset = this.swipeOffsetPx();
+    return `translate3d(calc(${-idx * 100}% + ${offset}px), 0, 0)`;
+  });
+
+  readonly carouselTrackTransition = computed(() => {
+    if (this.isSwiping()) return 'none';
+    const cfg = this.firebaseService.slideConfig();
+    return `transform ${cfg.durationMs}ms ${cfg.easing}`;
+  });
+
+  // Smoothly sliding active indicator pill transform inside the bottom menu bar
+  readonly bottomPillTransform = computed(() => {
+    const idx = Math.max(0, this.activeBottomIndex());
+    return `translate3d(${idx * 100}%, 0, 0)`;
+  });
+
+  readonly bottomPillTransition = computed(() => {
+    const cfg = this.firebaseService.slideConfig();
+    return `transform ${cfg.durationMs}ms ${cfg.easing}`;
+  });
+
+  // Slide-Over Sidebar Menu state
   readonly showHeaderMenu = signal<boolean>(false);
 
   // Journal Grouping Mode: Day, Week, Month, Year, Custom, or All
@@ -105,6 +176,24 @@ export class App {
   // Toast notification
   readonly toastMessage = signal<string | null>(null);
   private toastTimeout: ReturnType<typeof setTimeout> | null = null;
+  private alertCheckInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Daily Notification Alert Parameters Form (Configured inside Covenant tab)
+  readonly isSavingAlerts = signal(false);
+  readonly alertSettingsForm = new FormGroup({
+    prayerAlertEnabled: new FormControl<boolean>(true, { nonNullable: true }),
+    prayerCheckTime: new FormControl<string>('20:00', { nonNullable: true }),
+    prayerAlertMessage: new FormControl<string>(
+      'No prayer session recorded today. Take time at the altar.',
+      { nonNullable: true }
+    ),
+    messageAlertEnabled: new FormControl<boolean>(true, { nonNullable: true }),
+    messageCheckTime: new FormControl<string>('21:00', { nonNullable: true }),
+    messageAlertMessage: new FormControl<string>(
+      'No message listening recorded today. Feed on the Word.',
+      { nonNullable: true }
+    ),
+  });
 
   // Search, Filters & Sort for Dashboard Recent Records
   readonly dashboardRecordSearch = signal('');
@@ -135,8 +224,46 @@ export class App {
   // Delete confirmation
   readonly deleteConfirmation = signal<{ type: 'session' | 'testimony' | 'request' | 'message' | 'authority' | 'seed'; id: string } | null>(null);
 
-  readonly categories = PRAYER_CATEGORIES;
   readonly Math = Math;
+
+  constructor() {
+    effect(() => {
+      const settings = this.firebaseService.alertSettings();
+      this.alertSettingsForm.patchValue(
+        {
+          prayerAlertEnabled: settings.prayerCheckEnabled,
+          prayerCheckTime: settings.prayerCheckTime || '20:00',
+          prayerAlertMessage:
+            settings.prayerAlertMessage ||
+            'No prayer session recorded today. Take time at the altar.',
+          messageAlertEnabled: settings.messageCheckEnabled,
+          messageCheckTime: settings.messageCheckTime || '21:00',
+          messageAlertMessage:
+            settings.messageAlertMessage ||
+            'No message listening recorded today. Feed on the Word.',
+        },
+        { emitEvent: false }
+      );
+    });
+  }
+
+  ngOnInit() {
+    if (typeof window !== 'undefined') {
+      // Check daily prayer & message alert conditions every 60 seconds
+      this.alertCheckInterval = setInterval(() => {
+        this.runDailyActivityAlertCheck(false);
+      }, 60_000);
+    }
+  }
+
+  ngOnDestroy() {
+    if (this.alertCheckInterval) {
+      clearInterval(this.alertCheckInterval);
+    }
+    if (this.slideAnimTimeout) {
+      clearTimeout(this.slideAnimTimeout);
+    }
+  }
 
   // Current user display name or email prefix
   readonly currentUserName = computed(() => {
@@ -294,7 +421,6 @@ export class App {
           (a.sortTimestamp || '').localeCompare(b.sortTimestamp || '')
         );
       }
-      // Default: Newest on top
       return (
         (b.date || '').localeCompare(a.date || '') ||
         (b.sortTimestamp || '').localeCompare(a.sortTimestamp || '')
@@ -361,7 +487,6 @@ export class App {
       if (sort === 'longest') {
         return (Number(b.durationMinutes) || 0) - (Number(a.durationMinutes) || 0);
       }
-      // Default: 'newest'
       return (
         (b.date || '').localeCompare(a.date || '') ||
         (b.startTime || '').localeCompare(a.startTime || '') ||
@@ -631,6 +756,97 @@ export class App {
     this.showToast('Test notification alert sent.');
   }
 
+  // Save Covenant Daily Prayer & Message Notification Alert Settings
+  async saveAlertSettings() {
+    this.isSavingAlerts.set(true);
+    const val = this.alertSettingsForm.getRawValue();
+    try {
+      if (val.prayerAlertEnabled || val.messageAlertEnabled) {
+        if (this.pwaService.notificationStatus() === 'default') {
+          await this.pwaService.enableNotifications();
+        }
+      }
+      await this.firebaseService.updateAlertSettings({
+        enabled: val.prayerAlertEnabled || val.messageAlertEnabled,
+        prayerCheckEnabled: val.prayerAlertEnabled,
+        prayerCheckTime: val.prayerCheckTime || '20:00',
+        prayerAlertMessage:
+          val.prayerAlertMessage.trim() ||
+          'No prayer session recorded today. Take time at the altar.',
+        messageCheckEnabled: val.messageAlertEnabled,
+        messageCheckTime: val.messageCheckTime || '21:00',
+        messageAlertMessage:
+          val.messageAlertMessage.trim() ||
+          'No message listening recorded today. Feed on the Word.',
+      });
+      this.showToast('Alert parameters saved.');
+    } finally {
+      this.isSavingAlerts.set(false);
+    }
+  }
+
+  // Evaluate daily prayer and message logs and fire notification alerts if none recorded for today
+  async runDailyActivityAlertCheck(manual = false) {
+    if (typeof window === 'undefined') return;
+    if (!this.firebaseService.isAuthenticated()) return;
+
+    const settings = this.firebaseService.alertSettings();
+    const todayStr = this.firebaseService.getTodayDateString();
+    const now = new Date();
+    const nowTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+    const todayPrayerMins = this.firebaseService.todayMinutes();
+    const todayMsgMins = this.firebaseService.todayMessageMinutes();
+
+    let triggeredAny = false;
+
+    // 1. Daily Prayer Check
+    if (settings.prayerCheckEnabled) {
+      const checkTime = settings.prayerCheckTime || '20:00';
+      const storageKey = `watchman_prayer_alert_${todayStr}`;
+      const alreadyNotified = !manual && localStorage.getItem(storageKey) === '1';
+
+      if (todayPrayerMins <= 0 && (manual || (nowTimeStr >= checkTime && !alreadyNotified))) {
+        if (!manual) {
+          localStorage.setItem(storageKey, '1');
+        }
+        await this.pwaService.sendAlert(
+          'Daily Prayer Watch Check',
+          settings.prayerAlertMessage || 'No prayer session recorded today. Take time at the altar.'
+        );
+        this.showToast('Prayer check alert: 0 mins recorded today.');
+        triggeredAny = true;
+      }
+    }
+
+    // 2. Daily Message Check
+    if (settings.messageCheckEnabled) {
+      const checkTime = settings.messageCheckTime || '21:00';
+      const storageKey = `watchman_message_alert_${todayStr}`;
+      const alreadyNotified = !manual && localStorage.getItem(storageKey) === '1';
+
+      if (todayMsgMins <= 0 && (manual || (nowTimeStr >= checkTime && !alreadyNotified))) {
+        if (!manual) {
+          localStorage.setItem(storageKey, '1');
+        }
+        await this.pwaService.sendAlert(
+          'Daily Message Check',
+          settings.messageAlertMessage || 'No message listening recorded today. Feed on the Word.'
+        );
+        if (!triggeredAny) {
+          this.showToast('Message check alert: 0 mins recorded today.');
+        }
+        triggeredAny = true;
+      }
+    }
+
+    if (manual && !triggeredAny) {
+      this.showToast(
+        `Daily check complete: ${this.firebaseService.formatMinutes(todayPrayerMins)} prayer & ${this.firebaseService.formatMinutes(todayMsgMins)} message logged today.`
+      );
+    }
+  }
+
   toggleHeaderMenu() {
     this.showHeaderMenu.update((v) => !v);
   }
@@ -639,12 +855,159 @@ export class App {
     this.showHeaderMenu.set(false);
   }
 
-  // Switch Active Tab & Collapse Header Menu
+  // Switch Active Tab with Directional Left/Right Slide Transition & Collapse Sidebar Menu
   setTab(tab: AppTab) {
-    this.activeTab.set(tab);
+    const prev = this.activeTab();
+    if (prev !== tab) {
+      const prevIdx = TAB_ORDER.indexOf(prev);
+      const nextIdx = TAB_ORDER.indexOf(tab);
+      this.tabSlideDirection.set(nextIdx >= prevIdx ? 'next' : 'prev');
+      this.triggerSlideAnimation();
+      this.activeTab.set(tab);
+    }
+    this.swipeOffsetPx.set(0);
+    this.isSwiping.set(false);
     this.showHeaderMenu.set(false);
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  private triggerSlideAnimation() {
+    if (this.slideAnimTimeout) {
+      clearTimeout(this.slideAnimTimeout);
+    }
+    this.isSlideAnimating.set(true);
+    const duration = this.firebaseService.slideConfig().durationMs || 360;
+    this.slideAnimTimeout = setTimeout(() => {
+      this.isSlideAnimating.set(false);
+    }, duration + 40);
+  }
+
+  // Slide Left to Previous Option in Bottom Menu Bar
+  slidePrevTab() {
+    const items = this.firebaseService.bottomNavItems();
+    const idx = this.activeBottomIndex();
+    if (idx > 0) {
+      this.setTab(items[idx - 1].id);
+    } else if (idx === -1 && items.length > 0) {
+      this.setTab(items[0].id);
+    }
+  }
+
+  // Slide Right to Next Option in Bottom Menu Bar
+  slideNextTab() {
+    const items = this.firebaseService.bottomNavItems();
+    const idx = this.activeBottomIndex();
+    if (idx >= 0 && idx < items.length - 1) {
+      this.setTab(items[idx + 1].id);
+    } else if (idx === -1 && items.length > 0) {
+      this.setTab(items[0].id);
+    }
+  }
+
+  // Touch & Swipe Left/Right Handlers for Seamless Bottom Menu Bar Navigation
+  onTouchStart(event: TouchEvent) {
+    if (!this.firebaseService.slideConfig().enabled) return;
+    if (event.touches.length !== 1) return;
+
+    const targetEl = event.target as HTMLElement | null;
+    if (
+      targetEl &&
+      targetEl.closest('input, textarea, select, [data-no-swipe="true"]')
+    ) {
+      this.touchStartX = null;
+      this.touchStartY = null;
+      return;
+    }
+
+    this.touchStartX = event.touches[0].clientX;
+    this.touchStartY = event.touches[0].clientY;
+    this.touchLockedAxis = null;
+  }
+
+  onTouchMove(event: TouchEvent) {
+    if (this.touchStartX === null || this.touchStartY === null) return;
+    if (!this.isBottomBarTab()) return;
+    if (event.touches.length !== 1) return;
+
+    const dx = event.touches[0].clientX - this.touchStartX;
+    const dy = event.touches[0].clientY - this.touchStartY;
+
+    if (!this.touchLockedAxis) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      this.touchLockedAxis = Math.abs(dx) > Math.abs(dy) * 1.25 ? 'x' : 'y';
+    }
+
+    if (this.touchLockedAxis !== 'x') return;
+
+    this.isSwiping.set(true);
+    const idx = this.activeBottomIndex();
+    const total = this.firebaseService.bottomNavItems().length;
+
+    // Apply rubber-band resistance at first and last bottom menu bar options
+    const atEdge = (idx === 0 && dx > 0) || (idx === total - 1 && dx < 0);
+    const dampedOffset = atEdge ? dx * 0.25 : dx * 0.85;
+    this.swipeOffsetPx.set(Math.max(-220, Math.min(220, dampedOffset)));
+  }
+
+  onTouchEnd() {
+    if (this.touchStartX === null) return;
+    const dx = this.swipeOffsetPx();
+    const wasHorizontal = this.touchLockedAxis === 'x';
+    const threshold = this.firebaseService.slideConfig().swipeThresholdPx || 48;
+
+    this.touchStartX = null;
+    this.touchStartY = null;
+    this.touchLockedAxis = null;
+    this.isSwiping.set(false);
+    this.swipeOffsetPx.set(0);
+
+    if (!wasHorizontal) return;
+
+    // Swipe Left (dx < -threshold) -> Slide Right to Next Option
+    // Swipe Right (dx > threshold) -> Slide Left to Previous Option
+    if (dx <= -threshold && this.canSlideNext()) {
+      this.slideNextTab();
+    } else if (dx >= threshold && this.canSlidePrev()) {
+      this.slidePrevTab();
+    } else {
+      this.triggerSlideAnimation();
+    }
+  }
+
+  // Keyboard Left/Right Arrow Navigation Across Bottom Menu Bar Options
+  onWindowKeydown(event: KeyboardEvent) {
+    if (!this.firebaseService.slideConfig().enabled) return;
+    if (
+      this.showHeaderMenu() ||
+      this.showLogModal() ||
+      this.showTestimonyModal() ||
+      this.showTargetModal() ||
+      this.showRequestModal() ||
+      this.showCreateCircleModal() ||
+      this.showAddPartnerModal() ||
+      this.showAuthModal() ||
+      this.deleteConfirmation()
+    ) {
+      return;
+    }
+
+    const activeEl = document?.activeElement as HTMLElement | null;
+    if (
+      activeEl &&
+      (activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.tagName === 'SELECT' ||
+        activeEl.isContentEditable)
+    ) {
+      return;
+    }
+
+    if (event.key === 'ArrowLeft' && this.canSlidePrev()) {
+      this.slidePrevTab();
+    } else if (event.key === 'ArrowRight' && this.canSlideNext()) {
+      this.slideNextTab();
     }
   }
 
@@ -684,7 +1047,7 @@ export class App {
     try {
       const user = await this.firebaseService.loginWithGoogle();
       if (user) {
-        this.showToast('Welcome to the Secret Place altar!');
+        this.showToast('Welcome to Watchman.');
       }
     } catch (err) {
       console.error('Sign in failed', err);
@@ -696,7 +1059,7 @@ export class App {
     this.showHeaderMenu.set(false);
     try {
       await this.firebaseService.logout();
-      this.showToast('Signed out of prayer session.');
+      this.showToast('Signed out.');
     } catch {
       this.showToast('Sign out error.');
     }
@@ -741,7 +1104,7 @@ export class App {
     this.testimonyToEdit.set(null);
     this.allocatingSessionId.set(s.id);
     const summaryTopic = s.topics && s.topics.length > 0 ? s.topics[0] : 'Altar Prayer';
-    this.prefillTestimonyTitle.set(`Testimony: Answered for ${summaryTopic}`);
+    this.prefillTestimonyTitle.set(`Answered: ${summaryTopic}`);
     this.prefillTestimonyBurden.set(s.notes);
     this.showTestimonyModal.set(true);
   }
@@ -831,7 +1194,7 @@ export class App {
     try {
       await this.firebaseService.toggleRequestAnswered(r.id, r.status);
       if (r.status === 'active') {
-        this.showToast('Marked as Answered! Glory to God.');
+        this.showToast('Marked as Answered.');
       } else {
         this.showToast('Moved back to active watch list.');
       }
@@ -849,7 +1212,7 @@ export class App {
   async celebrateAmen(id: string) {
     try {
       await this.firebaseService.incrementAmen(id);
-      this.showToast('Amen! God is faithful.');
+      this.showToast('Amen recorded.');
     } catch (e) {
       console.error('Amen error', e);
     }
@@ -888,16 +1251,12 @@ Logged: ${weekHoursStr} / ${targetHoursStr} target (${pct}%)
 🎯 Milestone Progress:
 ${loggedHours} / ${targetHours} Hours (${periodPct}% achieved!)
 Consecutive Streak: ${streak} Days in Prayer
-Testimonies & Praise Reports: ${testimoniesCount} recorded
-
-"Again I say to you, if two of you agree on earth about anything they ask, it will be done for them by my Father in heaven." - Matthew 18:19
-
-Keep pressing in, partners! 🕊️`;
+Testimonies & Praise Reports: ${testimoniesCount} recorded`;
 
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       navigator.clipboard.writeText(digestText).then(() => {
         this.copiedDigest.set(true);
-        this.showToast('Weekly partner digest copied to clipboard!');
+        this.showToast('Weekly digest copied.');
         setTimeout(() => this.copiedDigest.set(false), 3000);
       });
     }
@@ -938,7 +1297,7 @@ Keep pressing in, partners! 🕊️`;
         error: () => {
           this.isGeneratingDigest.set(false);
           this.generatedEncouragement.set(
-            `Grace and peace to the ${p.name} altar! Together you have faithfully preserved the flame, logging ${weekHours} this week towards your ${targetHours}-hour target. Where partners agree in prayer, heaven moves. Continue steadfast in faith!`
+            `Grace and peace to ${p.name}! Together you have logged ${weekHours} this week towards your ${targetHours}-hour target.`
           );
         },
       });

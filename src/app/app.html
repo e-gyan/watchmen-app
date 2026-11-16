@@ -1,5 +1,5 @@
 <div class="min-h-screen bg-stone-950 text-stone-100 flex flex-col font-sans">
-  <!-- Top Header with Collapsible Menu (Tap to open, collapses on any selection) -->
+  <!-- Top Header with Sidebar Menu Trigger -->
   <header class="sticky top-0 z-40 w-full bg-stone-950/95 backdrop-blur-md border-b border-stone-800/80 px-4 sm:px-6 py-3">
     <div class="flex items-center justify-between gap-3 mx-auto max-w-7xl">
       <!-- Left: Brand + Active Circle Badge -->
@@ -9,7 +9,7 @@
           (click)="setTab('dashboard')"
           class="text-left group flex items-center gap-2 shrink-0 focus:outline-none"
         >
-          <div class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/20 transition-colors shrink-0">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:bg-amber-500/25 transition-colors shrink-0">
             <mat-icon style="font-size: 20px;">local_fire_department</mat-icon>
           </div>
           <div class="shrink-0">
@@ -24,7 +24,7 @@
             type="button"
             (click)="toggleHeaderMenu()"
             class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-stone-900 border border-stone-800 text-xs text-stone-300 hover:border-amber-500/40 transition-colors truncate max-w-[220px]"
-            title="Tap to switch circle or open menu"
+            title="Tap to open sidebar menu"
           >
             <mat-icon class="text-amber-400 shrink-0" style="font-size: 14px;">
               {{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'lock' : 'groups' }}
@@ -34,7 +34,7 @@
         }
       </div>
 
-      <!-- Right: Install App & Collapsible Menu Trigger Button -->
+      <!-- Right: Install App & Sidebar Menu Trigger Button -->
       <div class="flex items-center gap-2 shrink-0">
         @if (!pwaService.isInstalled()) {
           <button
@@ -59,231 +59,215 @@
               : 'bg-stone-900 hover:bg-stone-800 border-stone-700 text-stone-200'
           "
           [attr.aria-expanded]="showHeaderMenu()"
-          aria-label="Toggle navigation and workspace menu"
+          aria-label="Open sidebar navigation menu"
         >
-          <mat-icon style="font-size: 18px;">{{ showHeaderMenu() ? 'expand_less' : 'menu' }}</mat-icon>
+          <mat-icon style="font-size: 18px;">{{ showHeaderMenu() ? 'close' : 'menu' }}</mat-icon>
           <span>Menu</span>
         </button>
       </div>
     </div>
+  </header>
 
-    <!-- Collapsible Dropdown Menu Panel (Collapses automatically when any selection is made) -->
-    @if (showHeaderMenu()) {
-      <div class="mx-auto max-w-7xl mt-3 pt-3 border-t border-stone-800/90 space-y-4">
-        <!-- Section 1: Navigation Views -->
-        <div>
-          <span class="block text-[10px] font-semibold uppercase tracking-wider text-stone-500 mb-2">
-            Views
-          </span>
-          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+  <!-- Slide-Over Sidebar Navigation Drawer (Includes Testimonies & Covenant + All Menu Options) -->
+  @if (showHeaderMenu()) {
+    <div
+      class="fixed inset-0 z-50 flex justify-end"
+      role="dialog"
+      aria-modal="true"
+    >
+      <button
+        type="button"
+        (click)="closeHeaderMenu()"
+        aria-label="Close sidebar menu overlay"
+        class="flex-1 h-full bg-black/75 backdrop-blur-xs cursor-default focus:outline-none"
+      ></button>
+      <aside
+        class="drawer-slide-in w-full max-w-sm bg-stone-900 border-l border-stone-800 h-full overflow-y-auto p-5 flex flex-col justify-between gap-6 shadow-2xl"
+      >
+        <div class="space-y-6">
+          <!-- Sidebar Header -->
+          <div class="flex items-center justify-between border-b border-stone-800 pb-4">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-amber-400">
+                <mat-icon style="font-size: 20px;">local_fire_department</mat-icon>
+              </div>
+              <div>
+                <span class="text-sm font-serif font-bold tracking-tight text-stone-100 block">
+                  WATCHMAN
+                </span>
+                <span class="text-[10px] text-stone-400 uppercase tracking-wider block">
+                  Sidebar Menu
+                </span>
+              </div>
+            </div>
             <button
               type="button"
-              (click)="setTab('dashboard')"
-              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
-              [class]="
-                activeTab() === 'dashboard'
-                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
-                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
-              "
+              (click)="closeHeaderMenu()"
+              class="p-1.5 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors"
+              aria-label="Close sidebar menu"
             >
-              <mat-icon style="font-size: 18px;">dashboard</mat-icon>
-              <span>Dashboard</span>
-            </button>
-
-            <button
-              type="button"
-              (click)="setTab('messages')"
-              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
-              [class]="
-                activeTab() === 'messages'
-                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
-                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
-              "
-            >
-              <mat-icon style="font-size: 18px;">headphones</mat-icon>
-              <span>Messages</span>
-            </button>
-
-            <button
-              type="button"
-              (click)="setTab('seeds')"
-              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
-              [class]="
-                activeTab() === 'seeds'
-                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
-                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
-              "
-            >
-              <mat-icon style="font-size: 18px;">volunteer_activism</mat-icon>
-              <span>Seed Altar</span>
-            </button>
-
-            <button
-              type="button"
-              (click)="setTab('journal')"
-              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
-              [class]="
-                activeTab() === 'journal'
-                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
-                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
-              "
-            >
-              <mat-icon style="font-size: 18px;">menu_book</mat-icon>
-              <span>Journal</span>
-            </button>
-
-            <button
-              type="button"
-              (click)="setTab('testimonies')"
-              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
-              [class]="
-                activeTab() === 'testimonies'
-                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
-                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
-              "
-            >
-              <mat-icon style="font-size: 18px;">celebration</mat-icon>
-              <span>Testimonies</span>
-            </button>
-
-            <button
-              type="button"
-              (click)="setTab('covenant')"
-              class="flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
-              [class]="
-                activeTab() === 'covenant'
-                  ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
-                  : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-200'
-              "
-            >
-              <mat-icon style="font-size: 18px;">handshake</mat-icon>
-              <span>Covenant</span>
+              <mat-icon style="font-size: 18px;">close</mat-icon>
             </button>
           </div>
-        </div>
 
-        <!-- Section 2: Circle Selection & Privacy Scope (Only when authenticated) -->
-        @if (firebaseService.isAuthenticated()) {
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-2 border-t border-stone-800/80">
-            <!-- Circle Switcher & Actions -->
-            <div class="p-3 rounded-xl bg-stone-900 border border-stone-800 space-y-2.5">
-              <div class="flex items-center justify-between">
-                <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
-                  Circle Space
-                </span>
-                <div class="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    (click)="openCreateCircleFromMenu()"
-                    class="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-medium border border-stone-700"
-                  >
-                    <mat-icon style="font-size: 13px;">add_circle_outline</mat-icon>
-                    <span>New</span>
-                  </button>
-                  @if (firebaseService.activePartnership()) {
-                    <button
-                      type="button"
-                      (click)="openAddPartnerFromMenu()"
-                      class="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 text-[11px] font-medium border border-stone-700"
-                    >
-                      <mat-icon style="font-size: 13px;">person_add</mat-icon>
-                      <span>Partner</span>
-                    </button>
-                    <button
-                      type="button"
-                      (click)="openTargetsFromMenu()"
-                      class="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[11px] font-medium border border-stone-700"
-                    >
-                      <mat-icon style="font-size: 13px;">tune</mat-icon>
-                      <span>Targets</span>
-                    </button>
-                  }
-                </div>
-              </div>
-
-              @if (firebaseService.partnerships().length > 0) {
-                <div class="flex flex-wrap gap-1.5">
-                  @for (p of firebaseService.partnerships(); track p.id) {
-                    <button
-                      type="button"
-                      (click)="selectCircleFromMenu(p.id)"
-                      class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all"
+          <!-- Section 1: Backend-Driven Sidebar Navigation Options (Includes Covenant & Testimonies) -->
+          <div class="space-y-1.5">
+            <span class="block text-[10px] font-semibold uppercase tracking-wider text-stone-500 px-1">
+              Menu Options
+            </span>
+            <nav class="space-y-1">
+              @for (item of firebaseService.sidebarNavItems(); track item.id) {
+                <button
+                  type="button"
+                  (click)="setTab(item.id)"
+                  class="w-full flex items-center justify-between p-2.5 rounded-xl border text-xs font-medium transition-all text-left"
+                  [class]="
+                    activeTab() === item.id
+                      ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold shadow-xs'
+                      : 'bg-stone-950/60 hover:bg-stone-800 border-stone-800 text-stone-200'
+                  "
+                >
+                  <div class="flex items-center gap-2.5">
+                    <mat-icon style="font-size: 18px;">{{ item.icon }}</mat-icon>
+                    <span>{{ item.label }}</span>
+                  </div>
+                  @if (!item.showInBottomBar) {
+                    <span
+                      class="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold"
                       [class]="
-                        firebaseService.activePartnershipId() === p.id
-                          ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold'
-                          : 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700'
+                        activeTab() === item.id
+                          ? 'bg-stone-950/20 text-stone-950'
+                          : 'bg-stone-800 text-amber-400'
                       "
                     >
-                      <mat-icon style="font-size: 14px;">
-                        {{ (p.circleType === 'individual' || p.memberEmails.length <= 1) ? 'lock' : 'groups' }}
-                      </mat-icon>
-                      <span>{{ p.name }}</span>
-                      <span class="text-[10px] opacity-75">
-                        ({{ (p.circleType === 'individual' || p.memberEmails.length <= 1) ? 'Private' : p.memberEmails.length }})
-                      </span>
-                    </button>
+                      Sidebar
+                    </span>
                   }
+                </button>
+              }
+            </nav>
+          </div>
+
+          <!-- Section 2: Circle Selection & Member Filter (Only when authenticated) -->
+          @if (firebaseService.isAuthenticated()) {
+            <div class="space-y-3 pt-3 border-t border-stone-800/80">
+              <!-- Circle Switcher -->
+              <div class="p-3 rounded-xl bg-stone-950 border border-stone-800 space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+                    Circle Space
+                  </span>
+                  <div class="flex items-center gap-1">
+                    <button
+                      type="button"
+                      (click)="openCreateCircleFromMenu()"
+                      class="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-[11px] font-medium border border-stone-700"
+                    >
+                      <mat-icon style="font-size: 13px;">add</mat-icon>
+                      <span>New</span>
+                    </button>
+                    @if (firebaseService.activePartnership()) {
+                      <button
+                        type="button"
+                        (click)="openAddPartnerFromMenu()"
+                        class="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-amber-300 text-[11px] font-medium border border-stone-700"
+                      >
+                        <mat-icon style="font-size: 13px;">person_add</mat-icon>
+                        <span>Partner</span>
+                      </button>
+                      <button
+                        type="button"
+                        (click)="openTargetsFromMenu()"
+                        class="flex items-center gap-1 px-2 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 text-[11px] font-medium border border-stone-700"
+                      >
+                        <mat-icon style="font-size: 13px;">tune</mat-icon>
+                        <span>Goals</span>
+                      </button>
+                    }
+                  </div>
+                </div>
+
+                @if (firebaseService.partnerships().length > 0) {
+                  <div class="flex flex-wrap gap-1.5">
+                    @for (p of firebaseService.partnerships(); track p.id) {
+                      <button
+                        type="button"
+                        (click)="selectCircleFromMenu(p.id)"
+                        class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-all"
+                        [class]="
+                          firebaseService.activePartnershipId() === p.id
+                            ? 'bg-amber-500/20 border-amber-500 text-amber-300 font-semibold'
+                            : 'bg-stone-900 border-stone-800 text-stone-300 hover:border-stone-700'
+                        "
+                      >
+                        <mat-icon style="font-size: 14px;">
+                          {{ (p.circleType === 'individual' || p.memberEmails.length <= 1) ? 'lock' : 'groups' }}
+                        </mat-icon>
+                        <span class="truncate max-w-[140px]">{{ p.name }}</span>
+                      </button>
+                    }
+                  </div>
+                }
+              </div>
+
+              <!-- Partner Scope Filter -->
+              @if (firebaseService.activePartnership(); as activeP) {
+                <div class="p-3 rounded-xl bg-stone-950 border border-stone-800 space-y-2.5">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+                      Member Filter
+                    </span>
+                    <span class="text-[11px] font-mono text-amber-400 tabular-nums">
+                      {{ firebaseService.formatHours(firebaseService.periodMinutesLogged()) }} / {{ firebaseService.formatHours(activeP.periodTargetMinutes) }}h
+                    </span>
+                  </div>
+                  <div class="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      (click)="selectFilterMemberFromMenu('all')"
+                      class="px-2.5 py-1 rounded-lg text-xs font-medium border transition-all"
+                      [class]="
+                        firebaseService.activeFilterMember() === 'all'
+                          ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold'
+                          : 'bg-stone-900 border-stone-800 text-stone-300 hover:border-stone-700'
+                      "
+                    >
+                      {{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'My Records' : 'All Members' }}
+                    </button>
+                    @for (email of activeP.memberEmails; track email) {
+                      <button
+                        type="button"
+                        (click)="selectFilterMemberFromMenu(email.split('@')[0])"
+                        class="px-2.5 py-1 rounded-lg text-xs font-medium border transition-all"
+                        [class]="
+                          firebaseService.activeFilterMember() === email.split('@')[0]
+                            ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold'
+                            : 'bg-stone-900 border-stone-800 text-stone-300 hover:border-stone-700'
+                        "
+                      >
+                        {{ email.split('@')[0] }}
+                      </button>
+                    }
+                  </div>
                 </div>
               }
             </div>
+          }
+        </div>
 
-            <!-- Partner Scope Filter -->
-            @if (firebaseService.activePartnership(); as activeP) {
-              <div class="p-3 rounded-xl bg-stone-900 border border-stone-800 space-y-2.5">
-                <div class="flex items-center justify-between">
-                  <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
-                    Member Filter
-                  </span>
-                  <span class="text-[11px] font-mono text-amber-400 tabular-nums">
-                    {{ firebaseService.formatHours(firebaseService.periodMinutesLogged()) }} / {{ firebaseService.formatHours(activeP.periodTargetMinutes) }}h ({{ firebaseService.formatOneDecimal(firebaseService.periodProgressPct()) }}%)
-                  </span>
-                </div>
-                <div class="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    (click)="selectFilterMemberFromMenu('all')"
-                    class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all"
-                    [class]="
-                      firebaseService.activeFilterMember() === 'all'
-                        ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold'
-                        : 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700'
-                    "
-                  >
-                    {{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'My Records' : 'All Members' }}
-                  </button>
-                  @for (email of activeP.memberEmails; track email) {
-                    <button
-                      type="button"
-                      (click)="selectFilterMemberFromMenu(email.split('@')[0])"
-                      class="px-2.5 py-1.5 rounded-lg text-xs font-medium border transition-all"
-                      [class]="
-                        firebaseService.activeFilterMember() === email.split('@')[0]
-                          ? 'bg-amber-500 text-stone-950 border-amber-500 font-bold'
-                          : 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700'
-                      "
-                    >
-                      {{ email.split('@')[0] }}
-                    </button>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-
-        <!-- Section 3: Theme Schedule, PWA Install, Notification Alerts & Account -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-stone-800/80 text-xs">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-stone-400 text-[11px]">
-              Theme (Auto 6:45):
-            </span>
+        <!-- Section 3: Theme, PWA Install, Alerts & Account Footer -->
+        <div class="space-y-3 pt-4 border-t border-stone-800 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-stone-400 text-[11px]">Theme (6:45 Auto):</span>
             <app-theme-toggle (selected)="closeHeaderMenu()" />
+          </div>
 
+          <div class="flex flex-wrap items-center gap-2">
             @if (!pwaService.isInstalled()) {
               <button
                 type="button"
                 (click)="installPwaApp()"
-                class="flex items-center gap-1 py-1.5 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-medium transition-colors"
+                class="flex-1 flex items-center justify-center gap-1 py-2 px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 font-medium transition-colors"
               >
                 <mat-icon style="font-size: 15px;">download</mat-icon>
                 <span>Install App</span>
@@ -295,17 +279,16 @@
                 <button
                   type="button"
                   (click)="sendTestNotificationAlert()"
-                  class="flex items-center gap-1 py-1.5 px-2.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-medium transition-colors"
-                  title="Send a test notification alert"
+                  class="flex-1 flex items-center justify-center gap-1 py-2 px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-medium transition-colors"
                 >
                   <mat-icon style="font-size: 15px;">notifications_active</mat-icon>
-                  <span>Alerts On</span>
+                  <span>Alerts Active</span>
                 </button>
               } @else {
                 <button
                   type="button"
                   (click)="enableNotificationAlerts()"
-                  class="flex items-center gap-1 py-1.5 px-2.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700 font-medium transition-colors"
+                  class="flex-1 flex items-center justify-center gap-1 py-2 px-3 rounded-xl bg-stone-950 hover:bg-stone-800 text-stone-300 border border-stone-700 font-medium transition-colors"
                 >
                   <mat-icon style="font-size: 15px;">notifications</mat-icon>
                   <span>Enable Alerts</span>
@@ -314,18 +297,18 @@
             }
           </div>
 
-          <div class="flex items-center justify-between sm:justify-end gap-3">
+          <div class="pt-2 border-t border-stone-800/80 flex items-center justify-between gap-2">
             @if (firebaseService.isAuthenticated()) {
-              <div class="flex items-center gap-2">
-                <div class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center text-[11px] font-bold">
+              <div class="flex items-center gap-2 min-w-0">
+                <div class="w-6 h-6 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center text-[11px] font-bold shrink-0">
                   {{ currentUserName().slice(0, 1).toUpperCase() }}
                 </div>
-                <span class="text-stone-300 font-medium">{{ firebaseService.currentUser()?.email }}</span>
+                <span class="text-stone-300 font-medium truncate">{{ firebaseService.currentUser()?.email }}</span>
               </div>
               <button
                 type="button"
                 (click)="signOut()"
-                class="flex items-center gap-1 py-1.5 px-3 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700 transition-colors"
+                class="flex items-center gap-1 py-1.5 px-3 rounded-lg bg-stone-950 hover:bg-stone-800 text-stone-300 border border-stone-700 transition-colors shrink-0"
               >
                 <mat-icon style="font-size: 15px;">logout</mat-icon>
                 <span>Sign Out</span>
@@ -334,7 +317,7 @@
               <button
                 type="button"
                 (click)="openSignInModal()"
-                class="flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl text-xs font-medium bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-700"
+                class="w-full flex items-center justify-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
               >
                 <mat-icon style="font-size: 16px;">account_circle</mat-icon>
                 <span>Sign In</span>
@@ -342,70 +325,80 @@
             }
           </div>
         </div>
-      </div>
-    }
-  </header>
+      </aside>
+    </div>
+  }
 
-  <!-- Bottom Navigation Bar (Replaced Timer with Messages & Seed Altar) -->
-  <div class="fixed bottom-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-t border-stone-800 px-2 py-2 flex items-center justify-around">
-    <button
-      type="button"
-      (click)="setTab('dashboard')"
-      class="flex flex-col items-center gap-0.5 text-[10px] py-1 px-2 rounded-lg transition-colors"
-      [class]="activeTab() === 'dashboard' ? 'text-amber-400 font-bold' : 'text-stone-400'"
-    >
-      <mat-icon style="font-size: 20px;">dashboard</mat-icon>
-      <span>Dashboard</span>
-    </button>
-    <button
-      type="button"
-      (click)="setTab('messages')"
-      class="flex flex-col items-center gap-0.5 text-[10px] py-1 px-2 rounded-lg transition-colors"
-      [class]="activeTab() === 'messages' ? 'text-amber-400 font-bold' : 'text-stone-400'"
-    >
-      <mat-icon style="font-size: 20px;">headphones</mat-icon>
-      <span>Messages</span>
-    </button>
-    <button
-      type="button"
-      (click)="setTab('seeds')"
-      class="flex flex-col items-center gap-0.5 text-[10px] py-1 px-2 rounded-lg transition-colors"
-      [class]="activeTab() === 'seeds' ? 'text-amber-400 font-bold' : 'text-stone-400'"
-    >
-      <mat-icon style="font-size: 20px;">volunteer_activism</mat-icon>
-      <span>Seeds</span>
-    </button>
-    <button
-      type="button"
-      (click)="setTab('journal')"
-      class="flex flex-col items-center gap-0.5 text-[10px] py-1 px-2 rounded-lg transition-colors"
-      [class]="activeTab() === 'journal' ? 'text-amber-400 font-bold' : 'text-stone-400'"
-    >
-      <mat-icon style="font-size: 20px;">menu_book</mat-icon>
-      <span>Journal</span>
-    </button>
-    <button
-      type="button"
-      (click)="setTab('testimonies')"
-      class="flex flex-col items-center gap-0.5 text-[10px] py-1 px-2 rounded-lg transition-colors"
-      [class]="activeTab() === 'testimonies' ? 'text-amber-400 font-bold' : 'text-stone-400'"
-    >
-      <mat-icon style="font-size: 20px;">celebration</mat-icon>
-      <span>Testimonies</span>
-    </button>
-    <button
-      type="button"
-      (click)="setTab('covenant')"
-      class="flex flex-col items-center gap-0.5 text-[10px] py-1 px-2 rounded-lg transition-colors"
-      [class]="activeTab() === 'covenant' ? 'text-amber-400 font-bold' : 'text-stone-400'"
-    >
-      <mat-icon style="font-size: 20px;">handshake</mat-icon>
-      <span>Covenant</span>
-    </button>
-  </div>
+  <!-- Backend-Driven Bottom Navigation Bar with Smooth Left/Right Sliding Pill & Controls -->
+  <nav
+    aria-label="Primary bottom navigation"
+    (touchstart)="onTouchStart($event)"
+    (touchmove)="onTouchMove($event)"
+    (touchend)="onTouchEnd()"
+    class="fixed bottom-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-t border-stone-800 px-1.5 sm:px-3 py-1.5 select-none"
+  >
+    <div class="max-w-3xl mx-auto flex items-center gap-1">
+      <!-- Slide Left Button -->
+      <button
+        type="button"
+        (click)="slidePrevTab()"
+        [disabled]="!canSlidePrev()"
+        class="p-1.5 rounded-xl text-stone-400 hover:text-amber-400 hover:bg-stone-900 disabled:opacity-25 disabled:pointer-events-none transition-colors shrink-0"
+        title="Slide left to previous menu option"
+        aria-label="Slide left to previous menu option"
+      >
+        <mat-icon style="font-size: 18px;">chevron_left</mat-icon>
+      </button>
+
+      <!-- Sliding Menu Track -->
+      <div class="relative flex-1 flex items-center">
+        <!-- Smoothly Gliding Active Pill Indicator (Synced with Backend Slide Config) -->
+        @if (isBottomBarTab() && firebaseService.bottomNavItems().length > 0) {
+          <div
+            class="absolute inset-y-0 left-0 pointer-events-none p-0.5 z-0"
+            [style.width.%]="100 / firebaseService.bottomNavItems().length"
+            [style.transform]="bottomPillTransform()"
+            [style.transition]="bottomPillTransition()"
+          >
+            <div class="w-full h-full rounded-xl bg-amber-500/15 border border-amber-500/35 shadow-xs relative overflow-hidden">
+              <div class="absolute top-0 left-3 right-3 h-0.5 rounded-full bg-amber-400"></div>
+            </div>
+          </div>
+        }
+
+        @for (item of firebaseService.bottomNavItems(); track item.id) {
+          <button
+            type="button"
+            (click)="setTab(item.id)"
+            class="relative z-10 flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] py-1.5 px-1 rounded-xl transition-colors"
+            [class]="
+              activeTab() === item.id
+                ? 'text-amber-400 font-bold'
+                : 'text-stone-400 hover:text-stone-200'
+            "
+          >
+            <mat-icon style="font-size: 20px;">{{ item.icon }}</mat-icon>
+            <span class="truncate max-w-full">{{ item.label }}</span>
+          </button>
+        }
+      </div>
+
+      <!-- Slide Right Button -->
+      <button
+        type="button"
+        (click)="slideNextTab()"
+        [disabled]="!canSlideNext()"
+        class="p-1.5 rounded-xl text-stone-400 hover:text-amber-400 hover:bg-stone-900 disabled:opacity-25 disabled:pointer-events-none transition-colors shrink-0"
+        title="Slide right to next menu option"
+        aria-label="Slide right to next menu option"
+      >
+        <mat-icon style="font-size: 18px;">chevron_right</mat-icon>
+      </button>
+    </div>
+  </nav>
 
   <!-- Main Container -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-8 mb-20">
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-8 space-y-8 mb-20 overflow-x-hidden">
     <!-- CASE 1: USER IS NOT AUTHENTICATED -->
     @if (!firebaseService.isAuthenticated()) {
       <div class="max-w-xl mx-auto my-12 p-8 sm:p-10 rounded-3xl bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 border border-amber-500/30 text-center space-y-5 shadow-2xl">
@@ -420,7 +413,7 @@
             Watchman
           </h1>
           <p class="text-stone-400 text-xs sm:text-sm mt-2 max-w-md mx-auto">
-            Track prayer hours, messages, annual seeds, and testimonies alone or with partners.
+            Track prayer hours, messages, annual seeds, and analytics alone or with partners.
           </p>
         </div>
 
@@ -483,10 +476,28 @@
 
     <!-- CASE 3: AUTHENTICATED AND HAS ACTIVE PRAYER CIRCLE -->
     @else {
-      <!-- TAB 1: DASHBOARD & TARGETS -->
-      @if (activeTab() === 'dashboard') {
-        <div class="space-y-6">
-          @if (firebaseService.activePartnership(); as activeP) {
+      <!-- HORIZONTAL LEFT/RIGHT SLIDING CAROUSEL FOR BOTTOM MENU BAR OPTIONS -->
+      @if (isBottomBarTab()) {
+        <div
+          class="overflow-hidden w-full"
+          (touchstart)="onTouchStart($event)"
+          (touchmove)="onTouchMove($event)"
+          (touchend)="onTouchEnd()"
+        >
+          <div
+            class="flex w-full items-start will-change-transform"
+            [style.transform]="carouselTrackTransform()"
+            [style.transition]="carouselTrackTransition()"
+          >
+            <!-- TAB 1: DASHBOARD & TARGETS -->
+            <section
+              [class]="
+                activeTab() === 'dashboard' || isSlideAnimating() || isSwiping()
+                  ? 'w-full shrink-0 space-y-6'
+                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none space-y-6'
+              "
+            >
+              @if (firebaseService.activePartnership(); as activeP) {
             <!-- Hero Period Covenant Card -->
             <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-stone-900 via-stone-900 to-stone-950 border border-amber-500/30 p-6 sm:p-7 shadow-xl">
               <div class="relative z-10 space-y-5">
@@ -596,7 +607,7 @@
                 }
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
                 <!-- 1. Prayer Journal Total -->
                 <button
                   type="button"
@@ -657,7 +668,27 @@
                   </div>
                 </button>
 
-                <!-- 4. Testimonies Total -->
+                <!-- 4. Analytics Insights -->
+                <button
+                  type="button"
+                  (click)="setTab('analytics')"
+                  class="text-left p-4 rounded-xl bg-stone-950 border border-stone-800 hover:border-amber-500/50 transition-all space-y-1 group"
+                >
+                  <div class="flex items-center justify-between text-xs text-stone-400">
+                    <span class="font-semibold uppercase tracking-wider group-hover:text-amber-400 transition-colors">
+                      Analytics
+                    </span>
+                    <mat-icon class="text-sky-400" style="font-size: 16px;">insights</mat-icon>
+                  </div>
+                  <div class="text-xl font-serif font-bold text-sky-400 tabular-nums">
+                    {{ firebaseService.formatOneDecimal(firebaseService.periodProgressPct()) }}%
+                  </div>
+                  <div class="text-[11px] text-stone-400 font-mono tabular-nums">
+                    Trends &amp; growth
+                  </div>
+                </button>
+
+                <!-- 5. Testimonies Total -->
                 <button
                   type="button"
                   (click)="setTab('testimonies')"
@@ -677,7 +708,7 @@
                   </div>
                 </button>
 
-                <!-- 5. Covenant Petitions Total -->
+                <!-- 6. Covenant Petitions Total -->
                 <button
                   type="button"
                   (click)="setTab('covenant')"
@@ -1143,28 +1174,44 @@
                 }
               </div>
             </div>
-          }
-        </div>
-      }
+              }
+            </section>
 
-      <!-- TAB 2A: MESSAGE LISTENING TRACKER -->
-      @if (activeTab() === 'messages') {
-        <app-messages-tracker
-          (saved)="showToast($event)"
-        />
-      }
+            <!-- TAB 2: MESSAGE LISTENING TRACKER -->
+            <section
+              [class]="
+                activeTab() === 'messages' || isSlideAnimating() || isSwiping()
+                  ? 'w-full shrink-0'
+                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none'
+              "
+            >
+              <app-messages-tracker
+                (saved)="showToast($event)"
+              />
+            </section>
 
-      <!-- TAB 2B: AUTHORITY FIGURE SEED TRACKER -->
-      @if (activeTab() === 'seeds') {
-        <app-seed-tracker
-          (saved)="showToast($event)"
-        />
-      }
+            <!-- TAB 3: AUTHORITY FIGURE SEED TRACKER -->
+            <section
+              [class]="
+                activeTab() === 'seeds' || isSlideAnimating() || isSwiping()
+                  ? 'w-full shrink-0'
+                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none'
+              "
+            >
+              <app-seed-tracker
+                (saved)="showToast($event)"
+              />
+            </section>
 
-      <!-- TAB 3: SESSION JOURNAL (Minimalist Cards + Group by Day, Week, Month, Year, Custom, All) -->
-      @if (activeTab() === 'journal') {
-        <div class="space-y-5">
-          <!-- Header & Primary Action -->
+            <!-- TAB 4: SESSION JOURNAL (Minimalist Cards + Group by Day, Week, Month, Year, Custom, All) -->
+            <section
+              [class]="
+                activeTab() === 'journal' || isSlideAnimating() || isSwiping()
+                  ? 'w-full shrink-0 space-y-5'
+                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none space-y-5'
+              "
+            >
+              <!-- Header & Primary Action -->
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-800/80">
             <div>
               <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
@@ -1326,7 +1373,7 @@
             </div>
           }
 
-          <!-- Search, Category, Member & Sort Bar -->
+          <!-- Search, Custom Category, Member & Sort Bar -->
           <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-stone-900 border border-stone-800">
             <div>
               <label for="jSearch" class="block text-[11px] font-medium text-stone-400 mb-1">Search</label>
@@ -1341,7 +1388,7 @@
             </div>
 
             <div>
-              <label for="jCat" class="block text-[11px] font-medium text-stone-400 mb-1">Category</label>
+              <label for="jCat" class="block text-[11px] font-medium text-stone-400 mb-1">Custom Category</label>
               <select
                 id="jCat"
                 [value]="journalCategory()"
@@ -1349,7 +1396,7 @@
                 class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
               >
                 <option value="all">All Categories</option>
-                @for (c of categories; track c.name) {
+                @for (c of firebaseService.userCategories(); track c.name) {
                   <option [value]="c.name">{{ c.name }}</option>
                 }
               </select>
@@ -1582,12 +1629,25 @@
               </div>
             }
           }
+            </section>
+
+            <!-- TAB 5: ANALYTICS & INSIGHTS -->
+            <section
+              [class]="
+                activeTab() === 'analytics' || isSlideAnimating() || isSwiping()
+                  ? 'w-full shrink-0'
+                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none'
+              "
+            >
+              <app-analytics-tracker />
+            </section>
+          </div>
         </div>
       }
 
-      <!-- TAB 4: TESTIMONIES & PRAISE WALL -->
+      <!-- TAB 6: TESTIMONIES & PRAISE WALL (Sidebar Menu Option) -->
       @if (activeTab() === 'testimonies') {
-        <div class="space-y-6">
+        <div [class]="tabSlideDirection() === 'next' ? 'view-slide-next space-y-6' : 'view-slide-prev space-y-6'">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-800/80">
             <div>
               <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
@@ -1626,7 +1686,7 @@
             </div>
 
             <div>
-              <label for="tFilterCat" class="block text-[11px] font-medium text-stone-400 mb-1">Category</label>
+              <label for="tFilterCat" class="block text-[11px] font-medium text-stone-400 mb-1">Custom Category</label>
               <select
                 id="tFilterCat"
                 [value]="testimonyCategory()"
@@ -1634,7 +1694,7 @@
                 class="w-full bg-stone-950 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
               >
                 <option value="all">All Categories</option>
-                @for (c of categories; track c.name) {
+                @for (c of firebaseService.userCategories(); track c.name) {
                   <option [value]="c.name">{{ c.name }}</option>
                 }
               </select>
@@ -1763,9 +1823,9 @@
         </div>
       }
 
-      <!-- TAB 5: COVENANT, TARGETS & REQUESTS -->
+      <!-- TAB 7: COVENANT, TARGETS, NOTIFICATION ALERT PARAMETERS & REQUESTS (Sidebar Menu Option) -->
       @if (activeTab() === 'covenant') {
-        <div class="space-y-6">
+        <div [class]="tabSlideDirection() === 'next' ? 'view-slide-next space-y-6' : 'view-slide-prev space-y-6'">
           @if (firebaseService.activePartnership(); as activeP) {
             <div class="pb-4 border-b border-stone-800/80">
               <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
@@ -1775,7 +1835,7 @@
                 {{ activeP.name }}
               </h1>
               <p class="text-xs text-stone-400 mt-0.5">
-                Targets, members, and prayer requests.
+                Targets, daily notification alert checks, members, and petitions.
               </p>
             </div>
 
@@ -1862,6 +1922,175 @@
                   }
                 </div>
               </div>
+            </div>
+
+            <!-- Daily Prayer & Message Notification Alert Parameters Card -->
+            <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-5">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800 pb-4">
+                <div>
+                  <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
+                    Notification Alerts
+                  </span>
+                  <h3 class="text-base font-semibold text-stone-100">
+                    Daily Prayer &amp; Message Check Parameters
+                  </h3>
+                  <p class="text-xs text-stone-400 mt-0.5">
+                    Trigger an alert if no prayer or message is recorded by your scheduled check time.
+                  </p>
+                </div>
+
+                <div class="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    (click)="runDailyActivityAlertCheck(true)"
+                    class="flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 text-xs font-semibold transition-colors"
+                    title="Run immediate check for today's prayer and message records"
+                  >
+                    <mat-icon style="font-size: 16px;">notifications_active</mat-icon>
+                    <span>Check Now</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Today's Check Status Strip -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div class="p-3.5 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <mat-icon
+                      style="font-size: 18px;"
+                      [class]="firebaseService.todayMinutes() > 0 ? 'text-emerald-400' : 'text-amber-400'"
+                    >
+                      {{ firebaseService.todayMinutes() > 0 ? 'check_circle' : 'schedule' }}
+                    </mat-icon>
+                    <span class="text-stone-300 font-medium">Today's Prayer Log</span>
+                  </div>
+                  <span
+                    class="font-mono font-bold tabular-nums"
+                    [class]="firebaseService.todayMinutes() > 0 ? 'text-emerald-400' : 'text-amber-400'"
+                  >
+                    {{ firebaseService.todayMinutes() > 0 ? firebaseService.formatMinutes(firebaseService.todayMinutes()) + ' logged' : 'None today' }}
+                  </span>
+                </div>
+
+                <div class="p-3.5 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <mat-icon
+                      style="font-size: 18px;"
+                      [class]="firebaseService.todayMessageMinutes() > 0 ? 'text-emerald-400' : 'text-amber-400'"
+                    >
+                      {{ firebaseService.todayMessageMinutes() > 0 ? 'check_circle' : 'schedule' }}
+                    </mat-icon>
+                    <span class="text-stone-300 font-medium">Today's Message Log</span>
+                  </div>
+                  <span
+                    class="font-mono font-bold tabular-nums"
+                    [class]="firebaseService.todayMessageMinutes() > 0 ? 'text-emerald-400' : 'text-amber-400'"
+                  >
+                    {{ firebaseService.todayMessageMinutes() > 0 ? firebaseService.formatMinutes(firebaseService.todayMessageMinutes()) + ' logged' : 'None today' }}
+                  </span>
+                </div>
+              </div>
+
+              <form [formGroup]="alertSettingsForm" (ngSubmit)="saveAlertSettings()" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <!-- 1. Daily Prayer Check Parameter Box -->
+                  <div class="p-4 rounded-xl bg-stone-950 border border-stone-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <mat-icon class="text-amber-400" style="font-size: 18px;">local_fire_department</mat-icon>
+                        <span class="text-xs font-semibold text-stone-100">Prayer Check Alert</span>
+                      </div>
+                      <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs text-stone-300">
+                        <input
+                          type="checkbox"
+                          formControlName="prayerAlertEnabled"
+                          class="rounded border-stone-700 bg-stone-900 text-amber-500 focus:ring-amber-500"
+                        />
+                        <span>Enabled</span>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label for="prayerCheckTime" class="block text-[11px] font-medium text-stone-400 mb-1">
+                        Daily Check Time
+                      </label>
+                      <input
+                        id="prayerCheckTime"
+                        type="time"
+                        formControlName="prayerCheckTime"
+                        class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="prayerAlertMsg" class="block text-[11px] font-medium text-stone-400 mb-1">
+                        Alert Prompt
+                      </label>
+                      <input
+                        id="prayerAlertMsg"
+                        type="text"
+                        formControlName="prayerAlertMessage"
+                        placeholder="Reminder message if 0m prayed today"
+                        class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+
+                  <!-- 2. Daily Message Check Parameter Box -->
+                  <div class="p-4 rounded-xl bg-stone-950 border border-stone-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <mat-icon class="text-sky-400" style="font-size: 18px;">headphones</mat-icon>
+                        <span class="text-xs font-semibold text-stone-100">Message Check Alert</span>
+                      </div>
+                      <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs text-stone-300">
+                        <input
+                          type="checkbox"
+                          formControlName="messageAlertEnabled"
+                          class="rounded border-stone-700 bg-stone-900 text-amber-500 focus:ring-amber-500"
+                        />
+                        <span>Enabled</span>
+                      </label>
+                    </div>
+
+                    <div>
+                      <label for="messageCheckTime" class="block text-[11px] font-medium text-stone-400 mb-1">
+                        Daily Check Time
+                      </label>
+                      <input
+                        id="messageCheckTime"
+                        type="time"
+                        formControlName="messageCheckTime"
+                        class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label for="messageAlertMsg" class="block text-[11px] font-medium text-stone-400 mb-1">
+                        Alert Prompt
+                      </label>
+                      <input
+                        id="messageAlertMsg"
+                        type="text"
+                        formControlName="messageAlertMessage"
+                        placeholder="Reminder message if 0m listened today"
+                        class="w-full bg-stone-900 border border-stone-800 rounded-lg px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="submit"
+                    [disabled]="isSavingAlerts()"
+                    class="flex items-center gap-1.5 py-2 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold disabled:opacity-50 shadow-md"
+                  >
+                    <mat-icon style="font-size: 16px;">save</mat-icon>
+                    <span>{{ isSavingAlerts() ? 'Saving...' : 'Save Alert Parameters' }}</span>
+                  </button>
+                </div>
+              </form>
             </div>
 
             <!-- Active Prayer Watch List (Requests) -->
@@ -2068,7 +2297,7 @@
       role="dialog"
       aria-modal="true"
     >
-      <div class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+      <div class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
         <h3 class="text-base font-serif font-bold text-stone-100">Delete Record</h3>
         <p class="text-xs text-stone-400">
           Delete this record permanently?
@@ -2100,7 +2329,7 @@
       role="dialog"
       aria-modal="true"
     >
-      <div class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+      <div class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <mat-icon class="text-amber-400" style="font-size: 20px;">install_mobile</mat-icon>

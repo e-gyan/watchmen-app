@@ -145,292 +145,6 @@ interface AuthorityCardView {
         }
       </div>
 
-      <!-- Form 1: Add / Edit Authority Figure & Year-End Seed Target -->
-      @if (showAuthorityForm()) {
-        <div class="rounded-2xl bg-stone-900 border border-amber-500/40 p-5 sm:p-6 space-y-4 shadow-xl">
-          <div class="flex items-center justify-between border-b border-stone-800 pb-3">
-            <div>
-              <span class="text-[11px] font-semibold uppercase tracking-wider text-amber-400">
-                Annual Commitment
-              </span>
-              <h2 class="text-base font-serif font-bold text-stone-100">
-                {{ editingAuthority() ? 'Edit Seed Target' : 'New Seed Target' }}
-              </h2>
-            </div>
-            <button
-              type="button"
-              (click)="showAuthorityForm.set(false)"
-              class="text-stone-400 hover:text-stone-100 p-1 rounded-lg hover:bg-stone-800"
-            >
-              <mat-icon style="font-size: 18px;">close</mat-icon>
-            </button>
-          </div>
-
-          <form [formGroup]="authorityForm" (ngSubmit)="submitAuthority()" class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label for="authName" class="block text-xs font-medium text-stone-300 mb-1">
-                  Authority Name
-                </label>
-                <input
-                  id="authName"
-                  type="text"
-                  formControlName="authorityName"
-                  placeholder="Name"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label for="authRole" class="block text-xs font-medium text-stone-300 mb-1">
-                  Role (optional)
-                </label>
-                <input
-                  id="authRole"
-                  type="text"
-                  formControlName="roleTitle"
-                  placeholder="Role or title"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div>
-                <label for="authCurrency" class="block text-xs font-medium text-stone-300 mb-1">
-                  Currency
-                </label>
-                <select
-                  id="authCurrency"
-                  formControlName="currency"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-                >
-                  <option value="GHS">GHS (₵)</option>
-                  <option value="USD">USD ($)</option>
-                  <option value="GBP">GBP (£)</option>
-                  <option value="EUR">EUR (€)</option>
-                  <option value="NGN">NGN (₦)</option>
-                </select>
-              </div>
-
-              <div>
-                <label for="authTarget" class="block text-xs font-medium text-stone-300 mb-1">
-                  Annual Target
-                </label>
-                <input
-                  id="authTarget"
-                  type="number"
-                  step="0.1"
-                  min="1"
-                  formControlName="yearTargetAmount"
-                  placeholder="1000.0"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs font-mono text-amber-400 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label for="authYear" class="block text-xs font-medium text-stone-300 mb-1">
-                  Year
-                </label>
-                <input
-                  id="authYear"
-                  type="text"
-                  formControlName="targetYear"
-                  placeholder="2026"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <span class="block text-xs font-medium text-stone-300 mb-1">
-                  Mode
-                </span>
-                <div class="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    (click)="authorityForm.controls.mode.setValue('individual')"
-                    class="py-2 px-2 rounded-xl border text-xs font-medium flex items-center justify-center gap-1 transition-all"
-                    [class]="
-                      authorityForm.controls.mode.value === 'individual'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-semibold'
-                        : 'bg-stone-950 border-stone-800 text-stone-400'
-                    "
-                  >
-                    <mat-icon style="font-size: 14px;">person</mat-icon>
-                    <span>Alone</span>
-                  </button>
-                  <button
-                    type="button"
-                    (click)="authorityForm.controls.mode.setValue('partner')"
-                    class="py-2 px-2 rounded-xl border text-xs font-medium flex items-center justify-center gap-1 transition-all"
-                    [class]="
-                      authorityForm.controls.mode.value === 'partner'
-                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-semibold'
-                        : 'bg-stone-950 border-stone-800 text-stone-400'
-                    "
-                  >
-                    <mat-icon style="font-size: 14px;">groups</mat-icon>
-                    <span>Partner</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-end gap-2 pt-2 border-t border-stone-800">
-              <button
-                type="button"
-                (click)="showAuthorityForm.set(false)"
-                class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                [disabled]="isSaving()"
-                class="flex items-center gap-1.5 py-2 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 shadow-md"
-              >
-                <mat-icon style="font-size: 16px;">check</mat-icon>
-                <span>{{ editingAuthority() ? 'Update' : 'Save Target' }}</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      }
-
-      <!-- Form 2: Record Seed Given -->
-      @if (showSeedForm()) {
-        <div class="rounded-2xl bg-stone-900 border border-emerald-500/40 p-5 sm:p-6 space-y-4 shadow-xl">
-          <div class="flex items-center justify-between border-b border-stone-800 pb-3">
-            <div>
-              <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
-                Seed Record
-              </span>
-              <h2 class="text-base font-serif font-bold text-stone-100">
-                Log Seed Given
-              </h2>
-            </div>
-            <button
-              type="button"
-              (click)="showSeedForm.set(false)"
-              class="text-stone-400 hover:text-stone-100 p-1 rounded-lg hover:bg-stone-800"
-            >
-              <mat-icon style="font-size: 18px;">close</mat-icon>
-            </button>
-          </div>
-
-          <form [formGroup]="seedForm" (ngSubmit)="submitSeed()" class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              <div>
-                <label for="seedAuth" class="block text-xs font-medium text-stone-300 mb-1">
-                  Authority Figure
-                </label>
-                <select
-                  id="seedAuth"
-                  formControlName="authorityId"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-                >
-                  @for (a of firebaseService.authorities(); track a.id) {
-                    <option [value]="a.id">{{ a.authorityName }} ({{ a.currency }})</option>
-                  }
-                </select>
-              </div>
-
-              <div>
-                <label for="seedAmt" class="block text-xs font-medium text-stone-300 mb-1">
-                  Amount Given
-                </label>
-                <input
-                  id="seedAmt"
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  formControlName="amount"
-                  placeholder="100.0"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs font-mono text-emerald-400 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label for="seedDate" class="block text-xs font-medium text-stone-300 mb-1">
-                  Date
-                </label>
-                <input
-                  id="seedDate"
-                  type="date"
-                  formControlName="date"
-                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <span class="block text-xs font-medium text-stone-300 mb-1">
-                  Mode
-                </span>
-                <div class="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    (click)="seedForm.controls.mode.setValue('individual')"
-                    class="py-2 px-2 rounded-xl border text-xs font-medium flex items-center justify-center gap-1 transition-all"
-                    [class]="
-                      seedForm.controls.mode.value === 'individual'
-                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300 font-semibold'
-                        : 'bg-stone-950 border-stone-800 text-stone-400'
-                    "
-                  >
-                    <mat-icon style="font-size: 14px;">person</mat-icon>
-                    <span>Alone</span>
-                  </button>
-                  <button
-                    type="button"
-                    (click)="seedForm.controls.mode.setValue('partner')"
-                    class="py-2 px-2 rounded-xl border text-xs font-medium flex items-center justify-center gap-1 transition-all"
-                    [class]="
-                      seedForm.controls.mode.value === 'partner'
-                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300 font-semibold'
-                        : 'bg-stone-950 border-stone-800 text-stone-400'
-                    "
-                  >
-                    <mat-icon style="font-size: 14px;">groups</mat-icon>
-                    <span>Partner</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label for="seedNote" class="block text-xs font-medium text-stone-300 mb-1">
-                Note (optional)
-              </label>
-              <input
-                id="seedNote"
-                type="text"
-                formControlName="notes"
-                placeholder="Brief note"
-                class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div class="flex items-center justify-end gap-2 pt-2 border-t border-stone-800">
-              <button
-                type="button"
-                (click)="showSeedForm.set(false)"
-                class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                [disabled]="isSaving()"
-                class="flex items-center gap-1.5 py-2 px-5 rounded-xl text-xs font-semibold bg-emerald-500 text-stone-950 hover:bg-emerald-400 disabled:opacity-50 shadow-md"
-              >
-                <mat-icon style="font-size: 16px;">volunteer_activism</mat-icon>
-                <span>Save Seed</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      }
-
       <!-- Filter & Sort Bar -->
       @if (firebaseService.authorities().length > 0) {
         <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-stone-900 border border-stone-800">
@@ -679,6 +393,310 @@ interface AuthorityCardView {
           }
         </div>
       }
+
+      <!-- POP-UP MODAL 1: Add / Edit Authority Figure & Year-End Seed Target -->
+      @if (showAuthorityForm()) {
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-5"
+          >
+            <div class="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div>
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-amber-400">
+                  Annual Commitment
+                </span>
+                <h2 class="text-lg font-serif font-bold text-stone-100">
+                  {{ editingAuthority() ? 'Edit Seed Target' : 'New Seed Target' }}
+                </h2>
+              </div>
+              <button
+                type="button"
+                (click)="showAuthorityForm.set(false)"
+                class="text-stone-400 hover:text-stone-100 p-1.5 rounded-lg hover:bg-stone-800"
+                aria-label="Close modal"
+              >
+                <mat-icon style="font-size: 18px;">close</mat-icon>
+              </button>
+            </div>
+
+            <form [formGroup]="authorityForm" (ngSubmit)="submitAuthority()" class="space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="authName" class="block text-xs font-medium text-stone-300 mb-1">
+                    Authority Name
+                  </label>
+                  <input
+                    id="authName"
+                    type="text"
+                    formControlName="authorityName"
+                    placeholder="Name"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label for="authRole" class="block text-xs font-medium text-stone-300 mb-1">
+                    Role (optional)
+                  </label>
+                  <input
+                    id="authRole"
+                    type="text"
+                    formControlName="roleTitle"
+                    placeholder="Role or title"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label for="authCurrency" class="block text-xs font-medium text-stone-300 mb-1">
+                    Currency
+                  </label>
+                  <select
+                    id="authCurrency"
+                    formControlName="currency"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="GHS">GHS (₵)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="GBP">GBP (£)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="NGN">NGN (₦)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="authTarget" class="block text-xs font-medium text-stone-300 mb-1">
+                    Annual Target
+                  </label>
+                  <input
+                    id="authTarget"
+                    type="number"
+                    step="0.1"
+                    min="1"
+                    formControlName="yearTargetAmount"
+                    placeholder="1000.0"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs font-mono text-amber-400 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label for="authYear" class="block text-xs font-medium text-stone-300 mb-1">
+                    Year
+                  </label>
+                  <input
+                    id="authYear"
+                    type="text"
+                    formControlName="targetYear"
+                    placeholder="2026"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs font-mono text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <span class="block text-xs font-medium text-stone-300 mb-1">
+                  Mode
+                </span>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    (click)="authorityForm.controls.mode.setValue('individual')"
+                    class="py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                    [class]="
+                      authorityForm.controls.mode.value === 'individual'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-semibold'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    "
+                  >
+                    <mat-icon style="font-size: 14px;">person</mat-icon>
+                    <span>Alone</span>
+                  </button>
+                  <button
+                    type="button"
+                    (click)="authorityForm.controls.mode.setValue('partner')"
+                    class="py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                    [class]="
+                      authorityForm.controls.mode.value === 'partner'
+                        ? 'bg-amber-500/15 border-amber-500 text-amber-300 font-semibold'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    "
+                  >
+                    <mat-icon style="font-size: 14px;">groups</mat-icon>
+                    <span>Partner</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-800">
+                <button
+                  type="button"
+                  (click)="showAuthorityForm.set(false)"
+                  class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  [disabled]="isSaving()"
+                  class="flex items-center gap-1.5 py-2 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 shadow-md"
+                >
+                  <mat-icon style="font-size: 16px;">check</mat-icon>
+                  <span>{{ editingAuthority() ? 'Update' : 'Save Target' }}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      }
+
+      <!-- POP-UP MODAL 2: Record Seed Given -->
+      @if (showSeedForm()) {
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-5"
+          >
+            <div class="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div>
+                <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
+                  Seed Offering
+                </span>
+                <h2 class="text-lg font-serif font-bold text-stone-100">
+                  Log Seed Given
+                </h2>
+              </div>
+              <button
+                type="button"
+                (click)="showSeedForm.set(false)"
+                class="text-stone-400 hover:text-stone-100 p-1.5 rounded-lg hover:bg-stone-800"
+                aria-label="Close modal"
+              >
+                <mat-icon style="font-size: 18px;">close</mat-icon>
+              </button>
+            </div>
+
+            <form [formGroup]="seedForm" (ngSubmit)="submitSeed()" class="space-y-4">
+              <div>
+                <label for="seedAuth" class="block text-xs font-medium text-stone-300 mb-1">
+                  Target Authority Figure
+                </label>
+                <select
+                  id="seedAuth"
+                  formControlName="authorityId"
+                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                >
+                  @for (a of firebaseService.authorities(); track a.id) {
+                    <option [value]="a.id">{{ a.authorityName }} ({{ a.currency }})</option>
+                  }
+                </select>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label for="seedAmt" class="block text-xs font-medium text-stone-300 mb-1">
+                    Amount Given
+                  </label>
+                  <input
+                    id="seedAmt"
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    formControlName="amount"
+                    placeholder="100.0"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs font-mono text-emerald-400 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label for="seedDate" class="block text-xs font-medium text-stone-300 mb-1">
+                    Date
+                  </label>
+                  <input
+                    id="seedDate"
+                    type="date"
+                    formControlName="date"
+                    class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <span class="block text-xs font-medium text-stone-300 mb-1">
+                  Mode
+                </span>
+                <div class="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    (click)="seedForm.controls.mode.setValue('individual')"
+                    class="py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                    [class]="
+                      seedForm.controls.mode.value === 'individual'
+                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300 font-semibold'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    "
+                  >
+                    <mat-icon style="font-size: 14px;">person</mat-icon>
+                    <span>Alone</span>
+                  </button>
+                  <button
+                    type="button"
+                    (click)="seedForm.controls.mode.setValue('partner')"
+                    class="py-2 px-3 rounded-xl border text-xs font-medium flex items-center justify-center gap-1.5 transition-all"
+                    [class]="
+                      seedForm.controls.mode.value === 'partner'
+                        ? 'bg-emerald-500/15 border-emerald-500 text-emerald-300 font-semibold'
+                        : 'bg-stone-950 border-stone-800 text-stone-400'
+                    "
+                  >
+                    <mat-icon style="font-size: 14px;">groups</mat-icon>
+                    <span>Partner</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label for="seedNote" class="block text-xs font-medium text-stone-300 mb-1">
+                  Note (optional)
+                </label>
+                <input
+                  id="seedNote"
+                  type="text"
+                  formControlName="notes"
+                  placeholder="Brief note"
+                  class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-800">
+                <button
+                  type="button"
+                  (click)="showSeedForm.set(false)"
+                  class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  [disabled]="isSaving()"
+                  class="flex items-center gap-1.5 py-2 px-5 rounded-xl text-xs font-semibold bg-emerald-500 text-stone-950 hover:bg-emerald-400 disabled:opacity-50 shadow-md"
+                >
+                  <mat-icon style="font-size: 16px;">volunteer_activism</mat-icon>
+                  <span>Save Seed</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      }
     </div>
   `,
 })
@@ -787,7 +805,6 @@ export class SeedTracker {
       if (sort === 'highestTarget') {
         return b.targetAmountGhs - a.targetAmountGhs;
       }
-      // Default: 'newest'
       const aLatest = a.records[0]?.date || a.authority.createdAt || '';
       const bLatest = b.records[0]?.date || b.authority.createdAt || '';
       return (

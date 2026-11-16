@@ -27,12 +27,17 @@ import firebaseConfig from '../../../firebase-applet-config.json';
 import {
   AppUser,
   AuthorityFigureSeed,
+  BottomBarSlideConfig,
+  CATEGORY_COLOR_PALETTE,
+  CATEGORY_ICON_PALETTE,
   CategoryMetric,
+  DailyAlertSettings,
   DailyChartBar,
   DailyPrayerBundle,
   MessageListeningRecord,
+  NavigationMenuItem,
   Partnership,
-  PRAYER_CATEGORIES,
+  PrayerCategoryDef,
   PrayerRequest,
   PrayerSession,
   SeedGivingRecord,
@@ -77,6 +82,37 @@ const FALLBACK_USER_KEY = 'watchman_partner_auth_user_v1';
 const CACHE_AUTH_USER_KEY = 'watchman_cached_auth_user_v1';
 const ACTIVE_PARTNERSHIP_KEY = 'watchman_active_partnership_id_v1';
 const LOCAL_STORE_KEY = 'watchman_local_cloud_backup_v1';
+const CUSTOM_CATEGORIES_KEY = 'watchman_custom_categories_v1';
+const DAILY_ALERT_SETTINGS_KEY = 'watchman_daily_alert_settings_v1';
+
+const DEFAULT_MENU_ITEMS: NavigationMenuItem[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', showInBottomBar: true, showInSidebar: true, slideOrder: 0 },
+  { id: 'messages', label: 'Messages', icon: 'headphones', showInBottomBar: true, showInSidebar: true, slideOrder: 1 },
+  { id: 'seeds', label: 'Seeds', icon: 'volunteer_activism', showInBottomBar: true, showInSidebar: true, slideOrder: 2 },
+  { id: 'journal', label: 'Journal', icon: 'menu_book', showInBottomBar: true, showInSidebar: true, slideOrder: 3 },
+  { id: 'analytics', label: 'Analytics', icon: 'insights', showInBottomBar: true, showInSidebar: true, slideOrder: 4 },
+  { id: 'testimonies', label: 'Testimonies', icon: 'celebration', showInBottomBar: false, showInSidebar: true, slideOrder: 5 },
+  { id: 'covenant', label: 'Covenant', icon: 'handshake', showInBottomBar: false, showInSidebar: true, slideOrder: 6 },
+];
+
+const DEFAULT_SLIDE_CONFIG: BottomBarSlideConfig = {
+  enabled: true,
+  swipeThresholdPx: 48,
+  durationMs: 360,
+  easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  loop: false,
+  order: ['dashboard', 'messages', 'seeds', 'journal', 'analytics'],
+};
+
+const DEFAULT_ALERT_SETTINGS: DailyAlertSettings = {
+  enabled: true,
+  prayerCheckEnabled: true,
+  prayerCheckTime: '20:00',
+  prayerAlertMessage: 'No prayer recorded today. Take a moment for your daily watch.',
+  messageCheckEnabled: true,
+  messageCheckTime: '21:00',
+  messageAlertMessage: 'No message recorded today. Log your word intake.',
+};
 
 interface LocalCloudBackup {
   partnerships: Partnership[];
@@ -170,6 +206,42 @@ export class FirebaseService {
   // Filter state (e.g. view all in circle or specific partner)
   readonly activeFilterMember = signal<string>('all');
 
+  // Backend-driven navigation menu items & left/right slide configuration
+  readonly menuItems = signal<NavigationMenuItem[]>(DEFAULT_MENU_ITEMS);
+  readonly slideConfig = signal<BottomBarSlideConfig>(DEFAULT_SLIDE_CONFIG);
+  readonly bottomNavItems = computed(() =>
+    [...this.menuItems()]
+      .filter((item) => item.showInBottomBar)
+      .sort((a, b) => (a.slideOrder ?? 0) - (b.slideOrder ?? 0))
+  );
+  readonly sidebarNavItems = computed(() =>
+    [...this.menuItems()]
+      .filter((item) => item.showInSidebar)
+      .sort((a, b) => (a.slideOrder ?? 0) - (b.slideOrder ?? 0))
+  );
+
+  // User-defined custom categories (Default preset categories removed per user preference)
+  readonly customCategories = signal<PrayerCategoryDef[]>([]);
+  readonly userCategories = computed<PrayerCategoryDef[]>(() => {
+    const activeP = this.activePartnership();
+    const partnershipCats = activeP?.customCategories || [];
+    const localCats = this.customCategories();
+    const map = new Map<string, PrayerCategoryDef>();
+    for (const c of [...partnershipCats, ...localCats]) {
+      if (c && c.name && !map.has(c.name)) {
+        map.set(c.name, c);
+      }
+    }
+    return Array.from(map.values());
+  });
+
+  // Daily Notification Alert Parameters (Configured in Covenant tab)
+  readonly localAlertSettings = signal<DailyAlertSettings>(DEFAULT_ALERT_SETTINGS);
+  readonly alertSettings = computed<DailyAlertSettings>(() => {
+    const activeP = this.activePartnership();
+    return activeP?.alertSettings || this.localAlertSettings();
+  });
+
   // Live FX conversion to GHS (Dashboard & Seed main currency)
   readonly fxToGhs = signal<Record<string, number>>({
     GHS: 1,
@@ -195,11 +267,36 @@ export class FirebaseService {
   constructor() {
     // 0ms instant hydration from local cache before any network call
     this.hydrateFromLocalCacheSync();
+    this.fetchBackendMenuConfig();
     this.testConnection();
     this.initAuthListener();
     this.refreshLiveExchangeRates();
     this.connectFxStream();
     this.connectCloudStream();
+  }
+
+  private fetchBackendMenuConfig(): void {
+    if (typeof window === 'undefined') return;
+    fetch('/api/menu-config')
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          data: {
+            items?: NavigationMenuItem[];
+            slideConfig?: BottomBarSlideConfig;
+          } | null
+        ) => {
+          if (data?.items && Array.isArray(data.items) && data.items.length > 0) {
+            this.menuItems.set(data.items);
+          }
+          if (data?.slideConfig && typeof data.slideConfig === 'object') {
+            this.slideConfig.set({ ...DEFAULT_SLIDE_CONFIG, ...data.slideConfig });
+          }
+        }
+      )
+      .catch(() => {
+        // Keep default backend-aligned menu items
+      });
   }
 
   /**
@@ -209,6 +306,22 @@ export class FirebaseService {
   private hydrateFromLocalCacheSync(): void {
     if (typeof window === 'undefined') return;
     try {
+      const savedCats = localStorage.getItem(CUSTOM_CATEGORIES_KEY);
+      if (savedCats) {
+        const parsedCats = JSON.parse(savedCats) as PrayerCategoryDef[];
+        if (Array.isArray(parsedCats)) {
+          this.customCategories.set(parsedCats);
+        }
+      }
+
+      const savedAlerts = localStorage.getItem(DAILY_ALERT_SETTINGS_KEY);
+      if (savedAlerts) {
+        const parsedAlerts = JSON.parse(savedAlerts) as Partial<DailyAlertSettings>;
+        if (parsedAlerts && typeof parsedAlerts === 'object') {
+          this.localAlertSettings.set({ ...DEFAULT_ALERT_SETTINGS, ...parsedAlerts });
+        }
+      }
+
       const savedActivePid = localStorage.getItem(ACTIVE_PARTNERSHIP_KEY);
       if (savedActivePid) {
         this.activePartnershipId.set(savedActivePid);
@@ -1316,6 +1429,104 @@ export class FirebaseService {
     }
   }
 
+  async addCustomCategory(
+    nameInput: string,
+    colorInput?: string,
+    iconInput?: string
+  ): Promise<PrayerCategoryDef | null> {
+    const cleanName = nameInput.trim();
+    if (!cleanName) return null;
+
+    const existing = this.userCategories();
+    const found = existing.find((c) => c.name.toLowerCase() === cleanName.toLowerCase());
+    if (found) return found;
+
+    const idx = existing.length;
+    const newCat: PrayerCategoryDef = {
+      name: cleanName,
+      color: colorInput || CATEGORY_COLOR_PALETTE[idx % CATEGORY_COLOR_PALETTE.length],
+      icon: iconInput || CATEGORY_ICON_PALETTE[idx % CATEGORY_ICON_PALETTE.length],
+    };
+
+    const nextList = [...existing, newCat];
+    this.customCategories.set(nextList);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(nextList));
+      } catch {
+        // ignore storage error
+      }
+    }
+
+    const activeP = this.activePartnership();
+    if (activeP) {
+      this.pushToFallbackCloud('partnership', 'upsert', {
+        ...activeP,
+        customCategories: nextList,
+      } as unknown as Record<string, unknown>);
+    }
+
+    return newCat;
+  }
+
+  async removeCustomCategory(nameInput: string): Promise<void> {
+    const target = nameInput.trim().toLowerCase();
+    const nextList = this.userCategories().filter((c) => c.name.toLowerCase() !== target);
+    this.customCategories.set(nextList);
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(CUSTOM_CATEGORIES_KEY, JSON.stringify(nextList));
+      } catch {
+        // ignore
+      }
+    }
+
+    const activeP = this.activePartnership();
+    if (activeP) {
+      this.pushToFallbackCloud('partnership', 'upsert', {
+        ...activeP,
+        customCategories: nextList,
+      } as unknown as Record<string, unknown>);
+    }
+  }
+
+  async updateAlertSettings(settings: DailyAlertSettings): Promise<void> {
+    const cleanSettings: DailyAlertSettings = {
+      enabled: !!settings.enabled,
+      prayerCheckEnabled: !!settings.prayerCheckEnabled,
+      prayerCheckTime: settings.prayerCheckTime || '20:00',
+      prayerAlertMessage:
+        (settings.prayerAlertMessage || '').trim() ||
+        'No prayer recorded today. Take a moment for your daily watch.',
+      messageCheckEnabled: !!settings.messageCheckEnabled,
+      messageCheckTime: settings.messageCheckTime || '21:00',
+      messageAlertMessage:
+        (settings.messageAlertMessage || '').trim() ||
+        'No message recorded today. Log your word intake.',
+      lastPrayerAlertDate: settings.lastPrayerAlertDate,
+      lastMessageAlertDate: settings.lastMessageAlertDate,
+    };
+
+    this.localAlertSettings.set(cleanSettings);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(DAILY_ALERT_SETTINGS_KEY, JSON.stringify(cleanSettings));
+      } catch {
+        // ignore
+      }
+    }
+
+    const activeP = this.activePartnership();
+    if (activeP) {
+      this.pushToFallbackCloud('partnership', 'upsert', {
+        ...activeP,
+        alertSettings: removeUndefinedFields(cleanSettings),
+      } as unknown as Record<string, unknown>);
+    }
+  }
+
   // --- Session Operations (0ms Optimistic) ---
 
   async addSession(
@@ -2300,18 +2511,26 @@ export class FirebaseService {
     return weeks;
   });
 
+  readonly todayMessageMinutes = computed(() => {
+    const today = this.getTodayDateString();
+    return this.filteredMessages()
+      .filter((m) => m.date === today)
+      .reduce((acc, m) => acc + (Number(m.durationMinutes) || 0), 0);
+  });
+
   readonly categoryBreakdown = computed<CategoryMetric[]>(() => {
     const sessions = this.filteredSessions();
     const total = this.totalMinutes();
     if (total === 0) return [];
 
+    const userCats = this.userCategories();
     const map = new Map<string, { mins: number; count: number }>();
-    for (const c of PRAYER_CATEGORIES) {
-      map.set(c.name, { mins: 0, count: 0 });
-    }
 
     for (const s of sessions) {
-      const cats = s.categories && s.categories.length > 0 ? s.categories : [s.category];
+      const cats =
+        s.categories && s.categories.length > 0
+          ? s.categories
+          : [s.category || 'General'];
       for (const catName of cats) {
         const entry = map.get(catName) || { mins: 0, count: 0 };
         entry.mins += Math.round(s.durationMinutes / cats.length);
@@ -2321,16 +2540,20 @@ export class FirebaseService {
     }
 
     const result: CategoryMetric[] = [];
+    let idx = 0;
     for (const [catName, data] of map.entries()) {
       if (data.mins > 0) {
-        const catObj = PRAYER_CATEGORIES.find((c) => c.name === catName);
+        const catObj = userCats.find((c) => c.name === catName);
         result.push({
           category: catName,
           totalMinutes: data.mins,
           sessionCount: data.count,
           percentage: Math.round((data.mins / total) * 100),
-          color: catObj ? catObj.color : '#f59e0b',
+          color:
+            catObj?.color ||
+            CATEGORY_COLOR_PALETTE[idx % CATEGORY_COLOR_PALETTE.length],
         });
+        idx++;
       }
     }
 

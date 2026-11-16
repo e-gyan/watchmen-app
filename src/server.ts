@@ -43,6 +43,21 @@ function makePngChunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([len, typeBuf, data, crcBuf]);
 }
 
+function isInsideRoundedRect(
+  x: number,
+  y: number,
+  cx: number,
+  cy: number,
+  halfSize: number,
+  cornerRadius: number
+): boolean {
+  const qx = Math.abs(x - cx) - (halfSize - cornerRadius);
+  const qy = Math.abs(y - cy) - (halfSize - cornerRadius);
+  const dx = Math.max(qx, 0);
+  const dy = Math.max(qy, 0);
+  return dx * dx + dy * dy <= cornerRadius * cornerRadius;
+}
+
 function generateWatchmanPng(size: number, maskable = false): Buffer {
   const cacheKey = `${size}-${maskable ? 'm' : 'a'}`;
   const existing = pngCache.get(cacheKey);
@@ -51,8 +66,9 @@ function generateWatchmanPng(size: number, maskable = false): Buffer {
   const raw = Buffer.alloc(size * (size * 4 + 1));
   const cx = size / 2;
   const cy = size / 2;
-  const outerR = size * (maskable ? 0.34 : 0.38);
-  const innerR = size * (maskable ? 0.16 : 0.19);
+  const badgeHalf = size * (maskable ? 0.36 : 0.4);
+  const badgeRadius = size * 0.16;
+  const flameScale = size * (maskable ? 0.22 : 0.25);
 
   for (let y = 0; y < size; y++) {
     const rowStart = y * (size * 4 + 1);
@@ -61,41 +77,48 @@ function generateWatchmanPng(size: number, maskable = false): Buffer {
       const px = rowStart + 1 + x * 4;
       const dx = x - cx;
       const dy = y - cy;
-      const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Default dark background #0c0a09
-      let r = 12;
-      let g = 10;
-      let b = 9;
+      // Warm amber-cream outer background (#fffbeb) — no black flash
+      let r = 255;
+      let g = 251;
+      let b = 235;
 
-      if (dist <= outerR) {
-        // Warm inner surface #1c1917
-        r = 28;
-        g = 25;
-        b = 23;
-      }
+      // Rounded amber badge container matching the header icon next to WATCHMAN
+      if (isInsideRoundedRect(x, y, cx, cy, badgeHalf, badgeRadius)) {
+        const t = Math.min(1, Math.max(0, (y - (cy - badgeHalf)) / (badgeHalf * 2)));
+        r = Math.round(251 - t * 34);
+        g = Math.round(191 - t * 72);
+        b = Math.round(36 - t * 30);
 
-      // Outer ring accent (#f59e0b)
-      if (Math.abs(dist - outerR) <= Math.max(2, size * 0.018)) {
-        r = 245;
-        g = 158;
-        b = 11;
-      }
+        // Watchman Flame Silhouette (local_fire_department shape)
+        const nx = dx / flameScale;
+        const ny = (dy + flameScale * 0.15) / (flameScale * 1.15);
+        const wave = Math.sin((ny + 0.9) * 2.6) * 0.08;
+        const shiftedX = Math.abs(nx - wave);
+        if (ny >= -0.95 && ny <= 0.92) {
+          const outerWidth =
+            ny < 0
+              ? Math.pow(Math.max(0, (0.95 + ny) / 0.95), 0.78) * 0.88
+              : Math.sqrt(Math.max(0, 1 - Math.pow(ny / 0.92, 2))) * 0.88;
 
-      // Sacred flame / beacon diamond-teardrop in center (#f59e0b & #fbbf24)
-      const normX = Math.abs(dx) / innerR;
-      const normY = (dy + innerR * 0.25) / (innerR * 1.35);
-      if (normY >= -0.9 && normY <= 0.85) {
-        const halfWidth = normY < 0 ? (0.9 + normY) * 0.85 : Math.sqrt(Math.max(0, 1 - normY * normY)) * 0.78;
-        if (normX <= halfWidth) {
-          if (normX <= halfWidth * 0.48 && normY > -0.2) {
-            r = 254;
-            g = 243;
-            b = 199;
-          } else {
-            r = 245;
-            g = 158;
-            b = 11;
+          if (shiftedX <= outerWidth) {
+            r = 255;
+            g = 251;
+            b = 235;
+
+            const innerY = (dy - flameScale * 0.18) / (flameScale * 0.55);
+            const innerX = Math.abs(dx) / (flameScale * 0.42);
+            if (innerY >= -0.85 && innerY <= 0.85) {
+              const innerW =
+                innerY < 0
+                  ? (0.85 + innerY) * 0.85
+                  : Math.sqrt(Math.max(0, 1 - innerY * innerY)) * 0.85;
+              if (innerX <= innerW) {
+                r = 217;
+                g = 119;
+                b = 6;
+              }
+            }
           }
         }
       }
@@ -225,6 +248,72 @@ app.get('/apple-touch-icon.png', (_req, res) => {
   res.setHeader('Content-Type', 'image/png');
   res.setHeader('Cache-Control', 'public, max-age=86400');
   res.send(buf);
+});
+
+/**
+ * Backend-Driven Navigation Menu Configuration
+ * Omits 'testimonies' and 'covenant' from the bottom navigation bar while keeping them in the sidebar menu,
+ * and adds the 'analytics' option for deep trend & period insights.
+ */
+const BACKEND_MENU_ITEMS = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', showInBottomBar: true, showInSidebar: true, slideOrder: 0 },
+  { id: 'messages', label: 'Messages', icon: 'headphones', showInBottomBar: true, showInSidebar: true, slideOrder: 1 },
+  { id: 'seeds', label: 'Seeds', icon: 'volunteer_activism', showInBottomBar: true, showInSidebar: true, slideOrder: 2 },
+  { id: 'journal', label: 'Journal', icon: 'menu_book', showInBottomBar: true, showInSidebar: true, slideOrder: 3 },
+  { id: 'analytics', label: 'Analytics', icon: 'insights', showInBottomBar: true, showInSidebar: true, slideOrder: 4 },
+  { id: 'testimonies', label: 'Testimonies', icon: 'celebration', showInBottomBar: false, showInSidebar: true, slideOrder: 5 },
+  { id: 'covenant', label: 'Covenant', icon: 'handshake', showInBottomBar: false, showInSidebar: true, slideOrder: 6 },
+] as const;
+
+const BACKEND_SLIDE_CONFIG = {
+  enabled: true,
+  swipeThresholdPx: 48,
+  durationMs: 360,
+  easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+  loop: false,
+  order: ['dashboard', 'messages', 'seeds', 'journal', 'analytics'],
+} as const;
+
+app.get('/api/menu-config', (_req, res) => {
+  const bottomNavItems = BACKEND_MENU_ITEMS
+    .filter((item) => item.showInBottomBar)
+    .sort((a, b) => a.slideOrder - b.slideOrder);
+  const sidebarNavItems = BACKEND_MENU_ITEMS
+    .filter((item) => item.showInSidebar)
+    .sort((a, b) => a.slideOrder - b.slideOrder);
+
+  res.json({
+    items: BACKEND_MENU_ITEMS,
+    bottomNavItems,
+    sidebarNavItems,
+    slideConfig: BACKEND_SLIDE_CONFIG,
+  });
+});
+
+/**
+ * Backend Analytics Summary Endpoint
+ */
+app.get('/api/analytics', (req, res) => {
+  const partnershipId = String(req.query['partnershipId'] || '').trim();
+  const sessions = partnershipId ? memoryStore.sessions[partnershipId] || [] : [];
+  const messages = partnershipId ? memoryStore.messages[partnershipId] || [] : [];
+  const authorities = partnershipId ? memoryStore.authorities[partnershipId] || [] : [];
+  const seeds = partnershipId ? memoryStore.seeds[partnershipId] || [] : [];
+  const testimonies = partnershipId ? memoryStore.testimonies[partnershipId] || [] : [];
+  const requests = partnershipId ? memoryStore.requests[partnershipId] || [] : [];
+
+  res.json({
+    ok: true,
+    timestamp: new Date().toISOString(),
+    counts: {
+      sessions: sessions.length,
+      messages: messages.length,
+      authorities: authorities.length,
+      seeds: seeds.length,
+      testimonies: testimonies.length,
+      requests: requests.length,
+    },
+  });
 });
 
 /**

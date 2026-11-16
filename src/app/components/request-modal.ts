@@ -10,7 +10,7 @@ import {
 } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
-import { PRAYER_CATEGORIES, PrayerCategoryDef, PrayerRequest } from '../models/prayer.model';
+import { CATEGORY_COLOR_PALETTE, PrayerRequest } from '../models/prayer.model';
 import { FirebaseService } from '../services/firebase.service';
 
 @Component({
@@ -24,16 +24,16 @@ import { FirebaseService } from '../services/firebase.service';
       aria-modal="true"
     >
       <div
-        class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-6"
+        class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-6"
       >
         <!-- Modal Header -->
         <div class="flex items-center justify-between border-b border-stone-800/80 pb-4">
           <div>
             <span class="text-xs font-semibold tracking-wider uppercase text-amber-500">
-              Intercession Ledger
+              Petitions
             </span>
             <h2 class="text-xl sm:text-2xl font-serif font-bold text-stone-100">
-              {{ editRequest() ? 'Edit Prayer Request' : 'New Prayer Request' }}
+              {{ editRequest() ? 'Edit Petition' : 'New Petition' }}
             </h2>
           </div>
           <button
@@ -51,52 +51,98 @@ import { FirebaseService } from '../services/firebase.service';
           <!-- Title -->
           <div>
             <label for="rTitle" class="block text-xs font-medium text-stone-300 mb-1.5">
-              Request Title
+              Title
             </label>
             <input
               id="rTitle"
               type="text"
               formControlName="title"
-              placeholder="Short request title"
+              placeholder="Short petition title"
               class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
             />
           </div>
 
-          <!-- Multiple Category Selection -->
-          <div>
-            <div class="flex items-center justify-between mb-2">
+          <!-- Custom Category Setup & Selection -->
+          <div class="space-y-2.5">
+            <div class="flex items-center justify-between">
               <span class="block text-xs font-medium text-stone-300">
-                Categories
+                Custom Categories
               </span>
-              <span class="text-[11px] text-amber-400 font-mono">
+              <span class="text-[11px] text-amber-400 font-mono tabular-nums">
                 {{ selectedCategories().length }} selected
               </span>
             </div>
 
-            <div class="grid grid-cols-2 gap-2">
-              @for (c of categories; track c.name) {
-                <button
-                  type="button"
-                  (click)="toggleCategory(c.name)"
-                  class="flex items-center gap-2 p-2 rounded-xl border text-left text-xs transition-all"
-                  [class]="
-                    isCategorySelected(c.name)
-                      ? 'bg-stone-800/90 border-amber-500 text-stone-100 font-medium'
-                      : 'bg-stone-950/60 border-stone-800/80 text-stone-400 hover:border-stone-700'
-                  "
-                >
-                  <mat-icon [style.color]="c.color" style="font-size: 16px; width: 16px; height: 16px;">
-                    {{ c.icon }}
-                  </mat-icon>
-                  <span class="truncate flex-1 text-[11px]">{{ c.name }}</span>
-                  @if (isCategorySelected(c.name)) {
-                    <mat-icon style="font-size: 14px; width: 14px; height: 14px;" class="text-amber-400 shrink-0">
-                      check_circle
-                    </mat-icon>
-                  }
-                </button>
-              }
+            <!-- Add Custom Category Bar -->
+            <div class="flex items-center gap-2">
+              <input
+                type="text"
+                [value]="newCategoryName()"
+                (input)="newCategoryName.set($any($event.target).value)"
+                (keydown.enter)="$event.preventDefault(); createCustomCategory()"
+                placeholder="Create custom category..."
+                class="flex-1 bg-stone-950 border border-stone-800 rounded-xl px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+              />
+              <div class="flex items-center gap-1">
+                @for (color of colorPalette.slice(0, 4); track color) {
+                  <button
+                    type="button"
+                    (click)="newCategoryColor.set(color)"
+                    class="w-4 h-4 rounded-full border transition-transform"
+                    [style.backgroundColor]="color"
+                    [class]="newCategoryColor() === color ? 'scale-125 border-white' : 'border-transparent opacity-70'"
+                    aria-label="Category color"
+                  ></button>
+                }
+              </div>
+              <button
+                type="button"
+                (click)="createCustomCategory()"
+                class="flex items-center gap-1 py-1.5 px-3 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-semibold transition-colors shrink-0"
+              >
+                <mat-icon style="font-size: 14px;">add</mat-icon>
+                <span>Add</span>
+              </button>
             </div>
+
+            @if (firebaseService.userCategories().length === 0) {
+              <p class="text-[11px] text-stone-500 italic">
+                No preset categories. Add your own custom categories above.
+              </p>
+            } @else {
+              <div class="grid grid-cols-2 gap-2">
+                @for (c of firebaseService.userCategories(); track c.name) {
+                  <div
+                    class="flex items-center justify-between gap-1 p-2 rounded-xl border text-xs transition-all"
+                    [class]="
+                      isCategorySelected(c.name)
+                        ? 'bg-stone-800/90 border-amber-500 text-stone-100 font-medium'
+                        : 'bg-stone-950/60 border-stone-800/80 text-stone-400 hover:border-stone-700'
+                    "
+                  >
+                    <button
+                      type="button"
+                      (click)="toggleCategory(c.name)"
+                      class="flex items-center gap-1.5 flex-1 min-w-0 text-left"
+                    >
+                      <span
+                        class="w-2.5 h-2.5 rounded-full shrink-0"
+                        [style.backgroundColor]="c.color"
+                      ></span>
+                      <span class="truncate text-[11px]">{{ c.name }}</span>
+                    </button>
+                    <button
+                      type="button"
+                      (click)="deleteCustomCategory(c.name)"
+                      class="p-0.5 text-stone-500 hover:text-red-400 rounded shrink-0"
+                      title="Delete category"
+                    >
+                      <mat-icon style="font-size: 13px;">close</mat-icon>
+                    </button>
+                  </div>
+                }
+              </div>
+            }
           </div>
 
           <!-- Assigned Partner -->
@@ -137,9 +183,9 @@ import { FirebaseService } from '../services/firebase.service';
                 formControlName="status"
                 class="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-2 text-sm text-stone-100 focus:outline-none focus:border-amber-500"
               >
-                <option value="active">Actively Praying</option>
-                <option value="waiting">Waiting on the Lord</option>
-                <option value="answered">Answered (Praise Report)</option>
+                <option value="active">Active</option>
+                <option value="waiting">Waiting</option>
+                <option value="answered">Answered</option>
               </select>
             </div>
           }
@@ -155,11 +201,11 @@ import { FirebaseService } from '../services/firebase.service';
             </button>
             <button
               type="submit"
-              [disabled]="form.invalid || isSubmitting() || selectedCategories().length === 0"
+              [disabled]="form.invalid || isSubmitting()"
               class="flex items-center gap-2 py-2.5 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 disabled:pointer-events-none transition-all shadow-md"
             >
               <mat-icon style="font-size: 18px;">bookmark_add</mat-icon>
-              <span>{{ isSubmitting() ? 'Saving...' : (editRequest() ? 'Save Changes' : 'Add to Watch List') }}</span>
+              <span>{{ isSubmitting() ? 'Saving...' : (editRequest() ? 'Save Changes' : 'Add Petition') }}</span>
             </button>
           </div>
         </form>
@@ -168,14 +214,16 @@ import { FirebaseService } from '../services/firebase.service';
   `,
 })
 export class RequestModal implements OnInit {
-  private firebaseService = inject(FirebaseService);
+  readonly firebaseService = inject(FirebaseService);
 
   readonly editRequest = input<PrayerRequest | null>(null);
   readonly dismiss = output<void>();
 
   readonly isSubmitting = signal(false);
-  readonly categories: PrayerCategoryDef[] = PRAYER_CATEGORIES;
-  readonly selectedCategories = signal<string[]>(['Intercession & Nations']);
+  readonly colorPalette = CATEGORY_COLOR_PALETTE;
+  readonly newCategoryName = signal('');
+  readonly newCategoryColor = signal(CATEGORY_COLOR_PALETTE[0]);
+  readonly selectedCategories = signal<string[]>([]);
 
   readonly memberEmails = computed(() => {
     return this.firebaseService.activePartnership()?.memberEmails || [];
@@ -205,11 +253,34 @@ export class RequestModal implements OnInit {
         notes: edit.notes || '',
         status: edit.status,
       });
-      const cats = edit.categories && edit.categories.length > 0
-        ? edit.categories
-        : [edit.category || 'Intercession & Nations'];
+      const cats =
+        edit.categories && edit.categories.length > 0
+          ? edit.categories
+          : edit.category
+            ? [edit.category]
+            : [];
       this.selectedCategories.set(cats);
+    } else {
+      const existing = this.firebaseService.userCategories();
+      if (existing.length > 0) {
+        this.selectedCategories.set([existing[0].name]);
+      }
     }
+  }
+
+  async createCustomCategory() {
+    const name = this.newCategoryName().trim();
+    if (!name) return;
+    await this.firebaseService.addCustomCategory(name, this.newCategoryColor(), 'label');
+    this.newCategoryName.set('');
+    if (!this.selectedCategories().includes(name)) {
+      this.selectedCategories.set([...this.selectedCategories(), name]);
+    }
+  }
+
+  async deleteCustomCategory(name: string) {
+    await this.firebaseService.removeCustomCategory(name);
+    this.selectedCategories.set(this.selectedCategories().filter((c) => c !== name));
   }
 
   isCategorySelected(name: string): boolean {
@@ -219,9 +290,7 @@ export class RequestModal implements OnInit {
   toggleCategory(name: string) {
     const current = this.selectedCategories();
     if (current.includes(name)) {
-      if (current.length > 1) {
-        this.selectedCategories.set(current.filter((c) => c !== name));
-      }
+      this.selectedCategories.set(current.filter((c) => c !== name));
     } else {
       this.selectedCategories.set([...current, name]);
     }
@@ -229,8 +298,8 @@ export class RequestModal implements OnInit {
 
   async submit() {
     if (this.form.invalid) return;
-    const cats = this.selectedCategories();
-    if (cats.length === 0) return;
+    const rawCats = this.selectedCategories();
+    const cats = rawCats.length > 0 ? rawCats : ['Uncategorized'];
 
     this.isSubmitting.set(true);
     const val = this.form.getRawValue();

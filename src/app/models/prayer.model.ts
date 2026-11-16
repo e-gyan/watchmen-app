@@ -1,9 +1,55 @@
+export type AppTabId =
+  | 'dashboard'
+  | 'messages'
+  | 'seeds'
+  | 'journal'
+  | 'analytics'
+  | 'testimonies'
+  | 'covenant';
+
+export interface NavigationMenuItem {
+  id: AppTabId;
+  label: string;
+  icon: string;
+  showInBottomBar: boolean;
+  showInSidebar: boolean;
+  slideOrder?: number;
+}
+
+export interface BottomBarSlideConfig {
+  enabled: boolean;
+  swipeThresholdPx: number;
+  durationMs: number;
+  easing: string;
+  loop: boolean;
+  order: AppTabId[];
+}
+
+export interface DailyAlertSettings {
+  enabled: boolean;
+  prayerCheckEnabled: boolean;
+  prayerCheckTime: string;          // "HH:MM" 24-hour format, e.g. "20:00"
+  prayerAlertMessage: string;       // Brief alert copy when no prayer logged today
+  messageCheckEnabled: boolean;
+  messageCheckTime: string;         // "HH:MM" 24-hour format, e.g. "21:00"
+  messageAlertMessage: string;      // Brief alert copy when no message logged today
+  lastPrayerAlertDate?: string;     // "YYYY-MM-DD"
+  lastMessageAlertDate?: string;    // "YYYY-MM-DD"
+}
+
 export interface AppUser {
   uid: string;
   email: string;
   displayName: string;
   photoURL?: string;
   createdAt?: string;
+}
+
+export interface PrayerCategoryDef {
+  name: string;
+  icon: string;
+  color: string;
+  description?: string;
 }
 
 export interface Partnership {
@@ -20,6 +66,8 @@ export interface Partnership {
   periodTargetMinutes: number;        // e.g. 6000 (100h)
   periodStartDate: string;            // e.g. "2026-01-01"
   periodEndDate: string;              // e.g. "2026-12-31"
+  customCategories?: PrayerCategoryDef[];
+  alertSettings?: DailyAlertSettings;
   createdAt?: string;
 }
 
@@ -31,7 +79,7 @@ export interface PrayerSession {
   date: string;                       // "YYYY-MM-DD"
   startTime?: string;                 // "06:15 AM"
   durationMinutes: number;            // in minutes
-  category: string;                   // primary category (for backwards compat)
+  category: string;                   // primary category
   categories?: string[];              // multiple selected prayer categories
   topics: string[];
   notes: string;
@@ -158,49 +206,27 @@ export interface CategoryMetric {
   color: string;
 }
 
-export interface PrayerCategoryDef {
-  name: string;
-  icon: string;
-  color: string;
-  description: string;
-}
+// Default preset categories removed so users define their own custom categories
+export const PRAYER_CATEGORIES: PrayerCategoryDef[] = [];
 
-export const PRAYER_CATEGORIES: PrayerCategoryDef[] = [
-  {
-    name: 'Adoration & Praise',
-    icon: 'auto_awesome',
-    color: '#f59e0b',
-    description: 'Worship, beholding His majesty, exaltation of His attributes',
-  },
-  {
-    name: 'Intercession & Nations',
-    icon: 'public',
-    color: '#10b981',
-    description: 'Standing in the gap for souls, revival, leaders, family and friends',
-  },
-  {
-    name: 'Spiritual Warfare',
-    icon: 'shield',
-    color: '#ef4444',
-    description: 'Breaking strongholds, speaking authority in the name of Jesus',
-  },
-  {
-    name: 'Word & Meditation',
-    icon: 'menu_book',
-    color: '#6366f1',
-    description: 'Praying scriptures, waiting upon the Lord, listening prayer',
-  },
-  {
-    name: 'Petition & Personal',
-    icon: 'pan_tool_alt',
-    color: '#8b5cf6',
-    description: 'Personal needs, wisdom, direction, health, guidance and provision',
-  },
-  {
-    name: 'Thanksgiving & Altar',
-    icon: 'favorite',
-    color: '#ec4899',
-    description: 'Remembering His deeds, grateful celebration for past answers',
-  },
+export const CATEGORY_COLOR_PALETTE: string[] = [
+  '#f59e0b',
+  '#10b981',
+  '#3b82f6',
+  '#8b5cf6',
+  '#ec4899',
+  '#ef4444',
+  '#14b8a6',
+  '#f97316',
 ];
 
+export const CATEGORY_ICON_PALETTE: string[] = [
+  'label',
+  'local_fire_department',
+  'auto_awesome',
+  'public',
+  'shield',
+  'menu_book',
+  'favorite',
+  'bolt',
+];
