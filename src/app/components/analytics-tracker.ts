@@ -73,16 +73,16 @@ interface SpeakerRankItem {
       </div>
 
       <!-- High-Level Period Summary KPIs with Growth Delta -->
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <!-- Prayer Volume -->
-        <div class="rounded-2xl bg-stone-900 border border-stone-800 p-5 space-y-1.5">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+        <div class="rounded-2xl bg-stone-900 border border-stone-800 p-3.5 sm:p-5 space-y-1.5 min-w-0">
+          <div class="flex flex-wrap items-center justify-between gap-1">
+            <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-stone-400 truncate">
               Prayer Time
             </span>
             @if (selectedPeriod() !== 'all') {
               <span
-                class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full tabular-nums"
+                class="text-[10px] font-mono font-bold px-1.5 sm:px-2 py-0.5 rounded-full tabular-nums shrink-0"
                 [class]="
                   periodComparison().prayerGrowthPct >= 0
                     ? 'bg-emerald-500/15 text-emerald-400'
@@ -93,24 +93,24 @@ interface SpeakerRankItem {
               </span>
             }
           </div>
-          <div class="text-2xl sm:text-3xl font-serif font-bold text-amber-400 font-mono tabular-nums">
+          <div class="text-xl sm:text-3xl font-serif font-bold text-amber-400 font-mono tabular-nums truncate">
             {{ firebaseService.formatHours(periodMetrics().prayerMinutes) }}h
           </div>
-          <div class="flex items-center justify-between text-[11px] text-stone-500 font-mono tabular-nums">
-            <span>{{ firebaseService.formatMinutes(periodMetrics().prayerMinutes) }}</span>
-            <span>{{ firebaseService.formatInteger(periodMetrics().prayerSessionsCount) }} sessions</span>
+          <div class="flex flex-wrap items-center justify-between gap-1 text-[10px] sm:text-[11px] text-stone-500 font-mono tabular-nums">
+            <span class="truncate">{{ firebaseService.formatMinutes(periodMetrics().prayerMinutes) }}</span>
+            <span class="shrink-0">{{ firebaseService.formatInteger(periodMetrics().prayerSessionsCount) }} sessions</span>
           </div>
         </div>
 
         <!-- Message Intake -->
-        <div class="rounded-2xl bg-stone-900 border border-stone-800 p-5 space-y-1.5">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
-              Message Intake
+        <div class="rounded-2xl bg-stone-900 border border-stone-800 p-3.5 sm:p-5 space-y-1.5 min-w-0">
+          <div class="flex flex-wrap items-center justify-between gap-1">
+            <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-stone-400 truncate">
+              Messages
             </span>
             @if (selectedPeriod() !== 'all') {
               <span
-                class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full tabular-nums"
+                class="text-[10px] font-mono font-bold px-1.5 sm:px-2 py-0.5 rounded-full tabular-nums shrink-0"
                 [class]="
                   periodComparison().messageGrowthPct >= 0
                     ? 'bg-emerald-500/15 text-emerald-400'
@@ -121,24 +121,24 @@ interface SpeakerRankItem {
               </span>
             }
           </div>
-          <div class="text-2xl sm:text-3xl font-serif font-bold text-stone-100 font-mono tabular-nums">
+          <div class="text-xl sm:text-3xl font-serif font-bold text-stone-100 font-mono tabular-nums truncate">
             {{ firebaseService.formatHours(periodMetrics().messageMinutes) }}h
           </div>
-          <div class="flex items-center justify-between text-[11px] text-stone-500 font-mono tabular-nums">
-            <span>{{ firebaseService.formatInteger(periodMetrics().messagesCount) }} titles</span>
-            <span>{{ firebaseService.formatInteger(periodMetrics().messageListenings) }}x listened</span>
+          <div class="flex flex-wrap items-center justify-between gap-1 text-[10px] sm:text-[11px] text-stone-500 font-mono tabular-nums">
+            <span class="truncate">{{ firebaseService.formatInteger(periodMetrics().messagesCount) }} titles</span>
+            <span class="shrink-0">{{ firebaseService.formatInteger(periodMetrics().messageListenings) }}x listened</span>
           </div>
         </div>
 
         <!-- Seeds Sown (GHS) -->
-        <div class="rounded-2xl bg-stone-900 border border-stone-800 p-5 space-y-1.5">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
-              Seeds Given (GHS)
+        <div class="rounded-2xl bg-stone-900 border border-stone-800 p-3.5 sm:p-5 space-y-1.5 min-w-0">
+          <div class="flex flex-wrap items-center justify-between gap-1">
+            <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-stone-400 truncate">
+              Seeds (GHS)
             </span>
             @if (selectedPeriod() !== 'all') {
               <span
-                class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full tabular-nums"
+                class="text-[10px] font-mono font-bold px-1.5 sm:px-2 py-0.5 rounded-full tabular-nums shrink-0"
                 [class]="
                   periodComparison().seedGrowthPct >= 0
                     ? 'bg-emerald-500/15 text-emerald-400'
@@ -149,31 +149,31 @@ interface SpeakerRankItem {
               </span>
             }
           </div>
-          <div class="text-2xl sm:text-3xl font-serif font-bold text-emerald-400 font-mono tabular-nums">
+          <div class="text-lg sm:text-3xl font-serif font-bold text-emerald-400 font-mono tabular-nums truncate">
             GHS {{ firebaseService.formatOneDecimal(periodMetrics().seedGivenGhs) }}
           </div>
-          <div class="flex items-center justify-between text-[11px] text-stone-500 font-mono tabular-nums">
-            <span>{{ firebaseService.formatOneDecimal(firebaseService.seedTotalsSummary().progressPct) }}% of annual target</span>
-            <span>{{ firebaseService.formatInteger(periodMetrics().seedEntriesCount) }} seeds</span>
+          <div class="flex flex-wrap items-center justify-between gap-1 text-[10px] sm:text-[11px] text-stone-500 font-mono tabular-nums">
+            <span class="truncate">{{ firebaseService.formatOneDecimal(firebaseService.seedTotalsSummary().progressPct) }}% target</span>
+            <span class="shrink-0">{{ firebaseService.formatInteger(periodMetrics().seedEntriesCount) }} seeds</span>
           </div>
         </div>
 
         <!-- Answered Petitions & Testimonies -->
-        <div class="rounded-2xl bg-stone-900 border border-stone-800 p-5 space-y-1.5">
-          <div class="flex items-center justify-between">
-            <span class="text-[11px] font-semibold uppercase tracking-wider text-stone-400">
+        <div class="rounded-2xl bg-stone-900 border border-stone-800 p-3.5 sm:p-5 space-y-1.5 min-w-0">
+          <div class="flex flex-wrap items-center justify-between gap-1">
+            <span class="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-stone-400 truncate">
               Answer Rate
             </span>
-            <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 tabular-nums">
-              {{ firebaseService.formatInteger(periodMetrics().testimoniesCount) }} testimonies
+            <span class="text-[10px] font-mono font-bold px-1.5 sm:px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 tabular-nums shrink-0">
+              {{ firebaseService.formatInteger(periodMetrics().testimoniesCount) }} test.
             </span>
           </div>
-          <div class="text-2xl sm:text-3xl font-serif font-bold text-stone-100 font-mono tabular-nums">
+          <div class="text-xl sm:text-3xl font-serif font-bold text-stone-100 font-mono tabular-nums truncate">
             {{ firebaseService.formatOneDecimal(answerRatePct()) }}%
           </div>
-          <div class="flex items-center justify-between text-[11px] text-stone-500 font-mono tabular-nums">
-            <span>{{ firebaseService.formatInteger(answeredPetitionsCount()) }} answered</span>
-            <span>{{ firebaseService.formatInteger(activePetitionsCount()) }} active</span>
+          <div class="flex flex-wrap items-center justify-between gap-1 text-[10px] sm:text-[11px] text-stone-500 font-mono tabular-nums">
+            <span class="truncate">{{ firebaseService.formatInteger(answeredPetitionsCount()) }} answered</span>
+            <span class="shrink-0">{{ firebaseService.formatInteger(activePetitionsCount()) }} active</span>
           </div>
         </div>
       </div>
@@ -205,40 +205,42 @@ interface SpeakerRankItem {
           </div>
         </div>
 
-        <div class="grid grid-cols-6 sm:grid-cols-7 md:grid-cols-12 gap-2 pt-2 items-end h-48">
-          @for (pt of trendBars(); track pt.label + pt.subLabel) {
-            <div class="flex flex-col items-center h-full justify-end group">
-              <!-- Tooltip figures on hover -->
-              <div class="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-center bg-stone-950 border border-stone-800 rounded-lg px-1.5 py-1 mb-1 whitespace-nowrap z-10 pointer-events-none">
-                <div class="text-amber-400">{{ firebaseService.formatOneDecimal(pt.prayerHours) }}h pray</div>
-                <div class="text-sky-400">{{ firebaseService.formatOneDecimal(pt.messageHours) }}h msg</div>
-                <div class="text-emerald-400">₵{{ firebaseService.formatOneDecimal(pt.seedGhs) }}</div>
-              </div>
+        <div class="overflow-x-auto pb-1">
+          <div class="flex sm:grid sm:grid-cols-7 md:grid-cols-12 gap-2.5 sm:gap-2 pt-2 items-end h-48 min-w-max sm:min-w-0">
+            @for (pt of trendBars(); track pt.label + pt.subLabel) {
+              <div class="w-11 sm:w-auto flex flex-col items-center h-full justify-end group shrink-0">
+                <!-- Tooltip figures on hover -->
+                <div class="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-mono text-center bg-stone-950 border border-stone-800 rounded-lg px-1.5 py-1 mb-1 whitespace-nowrap z-10 pointer-events-none">
+                  <div class="text-amber-400">{{ firebaseService.formatOneDecimal(pt.prayerHours) }}h pray</div>
+                  <div class="text-sky-400">{{ firebaseService.formatOneDecimal(pt.messageHours) }}h msg</div>
+                  <div class="text-emerald-400">₵{{ firebaseService.formatOneDecimal(pt.seedGhs) }}</div>
+                </div>
 
-              <!-- Grouped Bars -->
-              <div class="w-full flex items-end justify-center gap-1 h-32 px-0.5">
-                <div
-                  class="flex-1 max-w-2.5 rounded-t bg-amber-500 transition-all duration-500"
-                  [style.height.%]="pt.prayerHeightPct"
-                ></div>
-                <div
-                  class="flex-1 max-w-2.5 rounded-t bg-sky-400 transition-all duration-500"
-                  [style.height.%]="pt.messageHeightPct"
-                ></div>
-                <div
-                  class="flex-1 max-w-2.5 rounded-t bg-emerald-400 transition-all duration-500"
-                  [style.height.%]="pt.seedHeightPct"
-                ></div>
-              </div>
+                <!-- Grouped Bars -->
+                <div class="w-full flex items-end justify-center gap-1 h-32 px-0.5">
+                  <div
+                    class="flex-1 max-w-2.5 rounded-t bg-amber-500 transition-all duration-500"
+                    [style.height.%]="pt.prayerHeightPct"
+                  ></div>
+                  <div
+                    class="flex-1 max-w-2.5 rounded-t bg-sky-400 transition-all duration-500"
+                    [style.height.%]="pt.messageHeightPct"
+                  ></div>
+                  <div
+                    class="flex-1 max-w-2.5 rounded-t bg-emerald-400 transition-all duration-500"
+                    [style.height.%]="pt.seedHeightPct"
+                  ></div>
+                </div>
 
-              <span class="text-[10px] font-mono text-stone-300 mt-1.5 truncate max-w-full">
-                {{ pt.label }}
-              </span>
-              <span class="text-[9px] font-mono text-stone-500 truncate max-w-full">
-                {{ pt.subLabel }}
-              </span>
-            </div>
-          }
+                <span class="text-[10px] font-mono text-stone-300 mt-1.5 truncate max-w-full">
+                  {{ pt.label }}
+                </span>
+                <span class="text-[9px] font-mono text-stone-500 truncate max-w-full">
+                  {{ pt.subLabel }}
+                </span>
+              </div>
+            }
+          </div>
         </div>
       </div>
 

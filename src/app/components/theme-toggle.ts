@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, inject, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, output } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { AppTheme, ThemeService } from '../services/theme.service';
 
@@ -7,58 +7,84 @@ import { AppTheme, ThemeService } from '../services/theme.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [MatIconModule],
   template: `
-    <div
-      role="group"
-      aria-label="Color theme selector (Auto 6:45 AM Light / 6:45 PM Dark)"
-      class="inline-flex items-center p-1 rounded-xl bg-stone-900 border border-stone-800/80 transition-colors shadow-inner gap-0.5"
-    >
-      <!-- Auto 6:45 AM / 6:45 PM Schedule Option -->
-      <button
-        type="button"
-        (click)="selectAuto()"
-        class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-all focus:outline-none"
-        [class]="
-          themeService.isAuto()
-            ? 'bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/40 shadow-xs'
-            : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/40'
-        "
-        title="Auto: Light 6:45 AM · Dark 6:45 PM"
+    <div class="w-full space-y-1.5">
+      <div
+        role="group"
+        aria-label="Display mode selector (Auto system preference, 6:45 AM Light / 6:45 PM Dark schedule, Light, Dark)"
+        class="grid grid-cols-4 gap-1 w-full p-1 rounded-xl bg-stone-950 border border-stone-800/80 transition-colors"
       >
-        <mat-icon style="font-size: 14px;">schedule</mat-icon>
-        <span class="font-medium text-[11px]">Auto (6:45)</span>
-      </button>
+        <!-- Auto: Learns from system selection / preference -->
+        <button
+          type="button"
+          (click)="selectAuto()"
+          [attr.aria-pressed]="themeService.isAuto()"
+          class="min-w-0 flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg text-[11px] transition-all focus:outline-none whitespace-nowrap"
+          [class]="
+            themeService.isAuto()
+              ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
+              : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/40 font-medium'
+          "
+          title="Auto: Follows your device system display preference"
+        >
+          <mat-icon class="shrink-0" style="font-size: 14px;">brightness_auto</mat-icon>
+          <span class="truncate">Auto</span>
+        </button>
 
-      <!-- Stone Dark Mode Option -->
-      <button
-        type="button"
-        (click)="selectManual('dark')"
-        class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-all focus:outline-none"
-        [class]="
-          !themeService.isAuto() && themeService.isDark()
-            ? 'bg-stone-800 text-amber-400 font-semibold shadow-xs ring-1 ring-amber-500/20'
-            : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/40'
-        "
-        title="Stone Dark Mode"
-      >
-        <mat-icon style="font-size: 14px;">dark_mode</mat-icon>
-        <span class="font-medium text-[11px]">Dark</span>
-      </button>
+        <!-- 6:45 Automated Schedule (6:45 AM Light + blended color / 6:45 PM Dark) -->
+        <button
+          type="button"
+          (click)="selectSchedule()"
+          [attr.aria-pressed]="themeService.isSchedule()"
+          class="min-w-0 flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg text-[11px] transition-all focus:outline-none whitespace-nowrap"
+          [class]="
+            themeService.isSchedule()
+              ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
+              : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/40 font-medium'
+          "
+          title="6:45 Auto: Light at 6:45 AM, Dark at 6:45 PM"
+        >
+          <mat-icon class="shrink-0" style="font-size: 14px;">schedule</mat-icon>
+          <span class="truncate">6:45</span>
+        </button>
 
-      <!-- High-Contrast Light Mode Option -->
-      <button
-        type="button"
-        (click)="selectManual('light')"
-        class="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-all focus:outline-none"
-        [class]="
-          !themeService.isAuto() && themeService.isLight()
-            ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
-            : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/40'
-        "
-        title="High-Contrast Light Mode"
-      >
-        <mat-icon style="font-size: 14px;">light_mode</mat-icon>
-        <span class="font-medium text-[11px]">Light</span>
-      </button>
+        <!-- Light Mode -->
+        <button
+          type="button"
+          (click)="selectManual('light')"
+          [attr.aria-pressed]="!themeService.isAuto() && !themeService.isSchedule() && themeService.isLight()"
+          class="min-w-0 flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg text-[11px] transition-all focus:outline-none whitespace-nowrap"
+          [class]="
+            !themeService.isAuto() && !themeService.isSchedule() && themeService.isLight()
+              ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
+              : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/40 font-medium'
+          "
+          title="Light mode blended with selected color"
+        >
+          <mat-icon class="shrink-0" style="font-size: 14px;">light_mode</mat-icon>
+          <span class="truncate">Light</span>
+        </button>
+
+        <!-- Dark Mode -->
+        <button
+          type="button"
+          (click)="selectManual('dark')"
+          [attr.aria-pressed]="!themeService.isAuto() && !themeService.isSchedule() && themeService.isDark()"
+          class="min-w-0 flex items-center justify-center gap-1 py-2 px-1.5 rounded-lg text-[11px] transition-all focus:outline-none whitespace-nowrap"
+          [class]="
+            !themeService.isAuto() && !themeService.isSchedule() && themeService.isDark()
+              ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
+              : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/40 font-medium'
+          "
+          title="Dark mode"
+        >
+          <mat-icon class="shrink-0" style="font-size: 14px;">dark_mode</mat-icon>
+          <span class="truncate">Dark</span>
+        </button>
+      </div>
+
+      <p class="text-[11px] text-stone-400 leading-tight px-0.5">
+        {{ modeSummary() }}
+      </p>
     </div>
   `,
 })
@@ -66,8 +92,26 @@ export class ThemeToggle {
   readonly themeService = inject(ThemeService);
   readonly selected = output<void>();
 
+  readonly modeSummary = computed(() => {
+    const pref = this.themeService.preference();
+    const active = this.themeService.currentTheme() === 'light' ? 'Light' : 'Dark';
+    if (pref === 'auto') {
+      const sys = this.themeService.systemTheme() === 'light' ? 'Light' : 'Dark';
+      return `System preference active (${sys})`;
+    }
+    if (pref === 'schedule') {
+      return `6:45 AM Light · 6:45 PM Dark (Now: ${active})`;
+    }
+    return pref === 'light' ? 'Light mode blended with theme color' : 'Dark mode';
+  });
+
   selectAuto() {
     this.themeService.setAutoTheme();
+    this.selected.emit();
+  }
+
+  selectSchedule() {
+    this.themeService.setScheduleTheme();
     this.selected.emit();
   }
 

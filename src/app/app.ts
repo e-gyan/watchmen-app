@@ -30,6 +30,7 @@ import { SeedTracker } from './components/seed-tracker';
 import { AnalyticsTracker } from './components/analytics-tracker';
 import { Streak } from './components/streak';
 import { ThemeToggle } from './components/theme-toggle';
+import { ColorPalettePicker } from './components/color-palette-picker';
 import { AuthModal } from './components/auth-modal';
 import { ThemeService } from './services/theme.service';
 import { PwaService } from './services/pwa.service';
@@ -75,6 +76,7 @@ const TAB_ORDER: AppTab[] = [
     AnalyticsTracker,
     Streak,
     ThemeToggle,
+    ColorPalettePicker,
     AuthModal,
   ],
   templateUrl: './app.html',

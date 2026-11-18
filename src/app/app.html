@@ -153,11 +153,11 @@
             <div class="space-y-3 pt-3 border-t border-stone-800/80">
               <!-- Circle Switcher -->
               <div class="p-3 rounded-xl bg-stone-950 border border-stone-800 space-y-2.5">
-                <div class="flex items-center justify-between">
+                <div class="flex flex-wrap items-center justify-between gap-2">
                   <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
                     Circle Space
                   </span>
-                  <div class="flex items-center gap-1">
+                  <div class="flex flex-wrap items-center gap-1">
                     <button
                       type="button"
                       (click)="openCreateCircleFromMenu()"
@@ -255,11 +255,25 @@
           }
         </div>
 
-        <!-- Section 3: Theme, PWA Install, Alerts & Account Footer -->
-        <div class="space-y-3 pt-4 border-t border-stone-800 text-xs">
-          <div class="flex items-center justify-between gap-2">
-            <span class="text-stone-400 text-[11px]">Theme (6:45 Auto):</span>
-            <app-theme-toggle (selected)="closeHeaderMenu()" />
+        <!-- Section 3: Display Mode (Auto / 6:45 Schedule / Light / Dark), Color Palette, PWA Install, Alerts & Account Footer -->
+        <div class="space-y-3.5 pt-4 border-t border-stone-800 text-xs">
+          <div class="space-y-2">
+            <span class="block text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+              Display Mode
+            </span>
+            <app-theme-toggle />
+          </div>
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[10px] font-semibold uppercase tracking-wider text-stone-400">
+                App Color Palette
+              </span>
+              <span class="text-[11px] font-medium text-amber-400 truncate">
+                {{ themeService.activePaletteOption().label }}
+              </span>
+            </div>
+            <app-color-palette-picker variant="compact" />
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
@@ -548,32 +562,34 @@
                 </div>
 
                 <!-- Analytical Pacing Strip -->
-                <div class="grid grid-cols-3 gap-4 pt-2 border-t border-stone-800/80 text-xs">
-                  <div>
-                    <span class="text-stone-500 block">Required Pace</span>
-                    <div class="text-stone-200 font-semibold font-mono tabular-nums text-sm">
+                <div class="grid grid-cols-3 gap-2 sm:gap-4 pt-2 border-t border-stone-800/80 text-xs">
+                  <div class="min-w-0">
+                    <span class="text-stone-500 block truncate">Required Pace</span>
+                    <div class="text-stone-200 font-semibold font-mono tabular-nums text-xs sm:text-sm truncate">
                       {{ firebaseService.formatOneDecimal(firebaseService.pacingAnalysis().requiredDailyMins) }}m / day
                     </div>
                   </div>
 
-                  <div>
-                    <span class="text-stone-500 block">Status</span>
-                    <div class="flex items-center gap-1 text-sm font-semibold">
+                  <div class="min-w-0">
+                    <span class="text-stone-500 block truncate">Status</span>
+                    <div class="flex items-center gap-1 text-xs sm:text-sm font-semibold">
                       @if (firebaseService.pacingAnalysis().isAhead) {
-                        <span class="text-emerald-400 flex items-center gap-1">
-                          <mat-icon style="font-size: 16px;">trending_up</mat-icon> Ahead
+                        <span class="text-emerald-400 flex items-center gap-1 truncate">
+                          <mat-icon class="shrink-0" style="font-size: 15px;">trending_up</mat-icon>
+                          <span class="truncate">Ahead</span>
                         </span>
                       } @else {
-                        <span class="text-amber-400 flex items-center gap-1">
-                          <mat-icon style="font-size: 16px;">trending_flat</mat-icon> On Track
+                        <span class="text-amber-400 flex items-center gap-1 truncate">
+                          <mat-icon class="shrink-0" style="font-size: 15px;">trending_flat</mat-icon>
+                          <span class="truncate">On Track</span>
                         </span>
                       }
                     </div>
                   </div>
 
-                  <div>
-                    <span class="text-stone-500 block">Remaining</span>
-                    <div class="text-stone-200 font-semibold font-mono tabular-nums text-sm">
+                  <div class="min-w-0">
+                    <span class="text-stone-500 block truncate">Remaining</span>
+                    <div class="text-stone-200 font-semibold font-mono tabular-nums text-xs sm:text-sm truncate">
                       {{ firebaseService.pacingAnalysis().daysRemaining }} days
                     </div>
                   </div>
@@ -874,7 +890,7 @@
                 </div>
 
                 <!-- SVG Bar Chart -->
-                <div class="h-44 w-full flex items-end justify-between gap-3 pt-6 pb-2 px-4 relative border-b border-stone-800">
+                <div class="h-44 w-full flex items-end justify-between gap-1.5 sm:gap-3 pt-6 pb-2 px-2 sm:px-4 relative border-b border-stone-800">
                   <!-- Target benchmark dashed line -->
                   <div
                     class="absolute left-0 right-0 border-b border-dashed border-amber-500/50 pointer-events-none"
@@ -930,7 +946,7 @@
                 </div>
 
                 <!-- Weekly Bars -->
-                <div class="h-44 w-full flex items-end justify-around gap-6 pt-6 pb-2 px-8 relative border-b border-stone-800">
+                <div class="h-44 w-full flex items-end justify-around gap-3 sm:gap-6 pt-6 pb-2 px-3 sm:px-8 relative border-b border-stone-800">
                   <div
                     class="absolute left-0 right-0 border-b border-dashed border-emerald-500/50 pointer-events-none"
                     [style.bottom.%]="Math.min(95, (activeP.weeklyTargetMinutes / chart8WeeksMaxMins()) * 100)"
@@ -1471,7 +1487,7 @@
                     <!-- Simplified Journal Record Cards inside Group -->
                     <div class="divide-y divide-stone-800/60">
                       @for (s of group.sessions; track s.id) {
-                        <div class="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 hover:bg-stone-950/40 transition-colors">
+                        <div class="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 hover:bg-stone-950/40 transition-colors">
                           <div class="min-w-0 flex-1 space-y-0.5">
                             <div class="flex flex-wrap items-center gap-1.5 text-xs">
                               <span class="font-semibold text-stone-100 truncate">
@@ -1498,7 +1514,7 @@
                             }
                           </div>
 
-                          <div class="flex items-center gap-2 shrink-0">
+                          <div class="flex items-center justify-between sm:justify-end gap-2 shrink-0 w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-stone-800/40">
                             <span class="font-mono font-bold text-amber-400 tabular-nums text-sm">
                               {{ firebaseService.formatMinutes(s.durationMinutes) }}
                             </span>
@@ -1551,7 +1567,7 @@
             } @else {
               <div class="rounded-2xl bg-stone-900 border border-stone-800 divide-y divide-stone-800/60 overflow-hidden">
                 @for (s of displayedJournalSessions(); track s.id) {
-                  <div class="px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 hover:bg-stone-950/40 transition-colors">
+                  <div class="px-4 sm:px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 hover:bg-stone-950/40 transition-colors">
                     <div class="min-w-0 flex-1 space-y-0.5">
                       <div class="flex flex-wrap items-center gap-1.5 text-xs">
                         <span class="font-semibold text-stone-100 truncate">
@@ -1578,7 +1594,7 @@
                       }
                     </div>
 
-                    <div class="flex items-center gap-2 shrink-0">
+                    <div class="flex items-center justify-between sm:justify-end gap-2 shrink-0 w-full sm:w-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-stone-800/40">
                       <span class="font-mono font-bold text-amber-400 tabular-nums text-sm">
                         {{ firebaseService.formatMinutes(s.durationMinutes) }}
                       </span>
@@ -1894,13 +1910,13 @@
 
                 <div class="space-y-2 pt-1 text-xs">
                   @for (email of activeP.memberEmails; track email) {
-                    <div class="p-3 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between">
-                      <div class="flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-                        <span class="font-semibold text-stone-200">{{ email }}</span>
+                    <div class="p-3 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
+                        <span class="font-semibold text-stone-200 truncate">{{ email }}</span>
                       </div>
                       @if (email.toLowerCase() === (firebaseService.currentUser()?.email || '').toLowerCase()) {
-                        <span class="text-[10px] text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded-full">
+                        <span class="text-[10px] text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded-full shrink-0">
                           You
                         </span>
                       }
@@ -1908,6 +1924,28 @@
                   }
                 </div>
               </div>
+            </div>
+
+            <!-- App Color Palette Card -->
+            <div class="rounded-2xl bg-stone-900 border border-stone-800 p-5 sm:p-6 space-y-4">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800 pb-3.5">
+                <div>
+                  <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
+                    Appearance
+                  </span>
+                  <h3 class="text-base font-semibold text-stone-100">
+                    App Color Palette
+                  </h3>
+                  <p class="text-xs text-stone-400 mt-0.5">
+                    Select a theme color blended into Light and Dark displays.
+                  </p>
+                </div>
+                <span class="text-xs font-medium text-amber-400 self-start sm:self-center shrink-0">
+                  Active: {{ themeService.activePaletteOption().label }}
+                </span>
+              </div>
+
+              <app-color-palette-picker variant="expanded" />
             </div>
 
             <!-- Daily Prayer & Message Notification Alert Parameters Card -->
@@ -1940,36 +1978,38 @@
 
               <!-- Today's Check Status Strip -->
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div class="p-3.5 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
+                <div class="p-3.5 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
                     <mat-icon
+                      class="shrink-0"
                       style="font-size: 18px;"
                       [class]="firebaseService.todayMinutes() > 0 ? 'text-emerald-400' : 'text-amber-400'"
                     >
                       {{ firebaseService.todayMinutes() > 0 ? 'check_circle' : 'schedule' }}
                     </mat-icon>
-                    <span class="text-stone-300 font-medium">Today's Prayer Log</span>
+                    <span class="text-stone-300 font-medium truncate">Today's Prayer Log</span>
                   </div>
                   <span
-                    class="font-mono font-bold tabular-nums"
+                    class="font-mono font-bold tabular-nums shrink-0"
                     [class]="firebaseService.todayMinutes() > 0 ? 'text-emerald-400' : 'text-amber-400'"
                   >
                     {{ firebaseService.todayMinutes() > 0 ? firebaseService.formatMinutes(firebaseService.todayMinutes()) + ' logged' : 'None today' }}
                   </span>
                 </div>
 
-                <div class="p-3.5 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
+                <div class="p-3.5 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2 min-w-0">
                     <mat-icon
+                      class="shrink-0"
                       style="font-size: 18px;"
                       [class]="firebaseService.todayMessageMinutes() > 0 ? 'text-emerald-400' : 'text-amber-400'"
                     >
                       {{ firebaseService.todayMessageMinutes() > 0 ? 'check_circle' : 'schedule' }}
                     </mat-icon>
-                    <span class="text-stone-300 font-medium">Today's Message Log</span>
+                    <span class="text-stone-300 font-medium truncate">Today's Message Log</span>
                   </div>
                   <span
-                    class="font-mono font-bold tabular-nums"
+                    class="font-mono font-bold tabular-nums shrink-0"
                     [class]="firebaseService.todayMessageMinutes() > 0 ? 'text-emerald-400' : 'text-amber-400'"
                   >
                     {{ firebaseService.todayMessageMinutes() > 0 ? firebaseService.formatMinutes(firebaseService.todayMessageMinutes()) + ' logged' : 'None today' }}
@@ -2156,11 +2196,11 @@
                   @for (req of displayedRequests(); track req.id) {
                     <div class="p-4 rounded-xl bg-stone-950 border border-stone-800 space-y-2 hover:border-stone-700 transition-colors">
                       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div class="flex items-center gap-2">
+                        <div class="flex flex-wrap items-center gap-2 min-w-0">
                           <button
                             type="button"
                             (click)="toggleRequestAnswered(req)"
-                            class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full cursor-pointer transition-opacity hover:opacity-80"
+                            class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full cursor-pointer transition-opacity hover:opacity-80 shrink-0"
                             [class]="
                               req.status === 'answered'
                                 ? 'bg-emerald-500/20 text-emerald-300'
@@ -2169,7 +2209,7 @@
                           >
                             {{ req.status === 'answered' ? 'Answered' : (req.status === 'waiting' ? 'Waiting' : 'Active') }}
                           </button>
-                          <h4 class="text-sm font-semibold text-stone-100">{{ req.title }}</h4>
+                          <h4 class="text-sm font-semibold text-stone-100 break-words min-w-0">{{ req.title }}</h4>
                         </div>
 
                         <div class="flex items-center gap-2 text-xs text-stone-500">
@@ -2395,20 +2435,20 @@
   <!-- Offline Connectivity Indicator -->
   @if (!pwaService.isOnline()) {
     <div
-      class="fixed bottom-16 left-4 z-50 bg-stone-900 border border-amber-500/40 text-amber-300 px-3.5 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs font-medium"
+      class="fixed bottom-16 left-3 right-3 sm:left-4 sm:right-auto z-50 bg-stone-900 border border-amber-500/40 text-amber-300 px-3.5 py-2 rounded-xl shadow-xl flex items-center gap-2 text-xs font-medium max-w-[calc(100vw-1.5rem)]"
     >
-      <mat-icon style="font-size: 16px;">cloud_off</mat-icon>
-      <span>Offline mode — changes save locally.</span>
+      <mat-icon class="shrink-0" style="font-size: 16px;">cloud_off</mat-icon>
+      <span class="truncate">Offline mode — changes save locally.</span>
     </div>
   }
 
   <!-- Toast Notification -->
   @if (toastMessage()) {
     <div
-      class="fixed bottom-16 lg:bottom-6 right-6 z-50 bg-stone-900 border border-amber-500/40 text-stone-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-medium"
+      class="fixed bottom-16 lg:bottom-6 left-3 right-3 sm:left-auto sm:right-6 z-50 bg-stone-900 border border-amber-500/40 text-stone-100 px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs font-medium max-w-[calc(100vw-1.5rem)]"
     >
-      <mat-icon class="text-amber-400" style="font-size: 18px;">check_circle</mat-icon>
-      <span>{{ toastMessage() }}</span>
+      <mat-icon class="text-amber-400 shrink-0" style="font-size: 18px;">check_circle</mat-icon>
+      <span class="truncate">{{ toastMessage() }}</span>
     </div>
   }
 </div>

@@ -9,20 +9,138 @@
   --font-mono: "JetBrains Mono", monospace;
 }
 
+:root,
+html[data-palette='amber'] {
+  --palette-200: #fde68a;
+  --palette-300: #fcd34d;
+  --palette-400: #fbbf24;
+  --palette-500: #f59e0b;
+  --palette-600: #d97706;
+  --palette-700: #b45309;
+  --palette-800: #92400e;
+  --palette-on-solid: #0c0a09;
+}
+
+html[data-palette='emerald'] {
+  --palette-200: #a7f3d0;
+  --palette-300: #6ee7b7;
+  --palette-400: #34d399;
+  --palette-500: #10b981;
+  --palette-600: #059669;
+  --palette-700: #047857;
+  --palette-800: #065f46;
+  --palette-on-solid: #ffffff;
+}
+
+html[data-palette='teal'] {
+  --palette-200: #99f6e4;
+  --palette-300: #5eead4;
+  --palette-400: #2dd4bf;
+  --palette-500: #14b8a6;
+  --palette-600: #0d9488;
+  --palette-700: #0f766e;
+  --palette-800: #115e59;
+  --palette-on-solid: #ffffff;
+}
+
+html[data-palette='indigo'] {
+  --palette-200: #c7d2fe;
+  --palette-300: #a5b4fc;
+  --palette-400: #818cf8;
+  --palette-500: #6366f1;
+  --palette-600: #4f46e5;
+  --palette-700: #4338ca;
+  --palette-800: #3730a3;
+  --palette-on-solid: #ffffff;
+}
+
+html[data-palette='rose'] {
+  --palette-200: #fecdd3;
+  --palette-300: #fda4af;
+  --palette-400: #fb7185;
+  --palette-500: #f43f5e;
+  --palette-600: #e11d48;
+  --palette-700: #be123c;
+  --palette-800: #9f1239;
+  --palette-on-solid: #ffffff;
+}
+
+html[data-palette='fuchsia'] {
+  --palette-200: #f5d0fe;
+  --palette-300: #f0abfc;
+  --palette-400: #e879f9;
+  --palette-500: #d946ef;
+  --palette-600: #c026d3;
+  --palette-700: #a21caf;
+  --palette-800: #86198f;
+  --palette-on-solid: #ffffff;
+}
+
+html[data-palette='slate'] {
+  --palette-200: #cbd5e1;
+  --palette-300: #94a3b8;
+  --palette-400: #94a3b8;
+  --palette-500: #64748b;
+  --palette-600: #475569;
+  --palette-700: #334155;
+  --palette-800: #1e293b;
+  --palette-on-solid: #ffffff;
+}
+
+html[data-palette='cyan'] {
+  --palette-200: #a5f3fc;
+  --palette-300: #67e8f9;
+  --palette-400: #22d3ee;
+  --palette-500: #06b6d4;
+  --palette-600: #0891b2;
+  --palette-700: #0e7490;
+  --palette-800: #155e75;
+  --palette-on-solid: #082f49;
+}
+
+html[data-palette='sky'] {
+  --palette-200: #bae6fd;
+  --palette-300: #7dd3fc;
+  --palette-400: #38bdf8;
+  --palette-500: #0ea5e9;
+  --palette-600: #0284c7;
+  --palette-700: #0369a1;
+  --palette-800: #075985;
+  --palette-on-solid: #082f49;
+}
+
+html[data-palette] {
+  --color-amber-200: var(--palette-200);
+  --color-amber-300: var(--palette-300);
+  --color-amber-400: var(--palette-400);
+  --color-amber-500: var(--palette-500);
+  --color-amber-600: var(--palette-600);
+}
+
+/* Solid CTA button text contrast across all 9 color palettes */
+.bg-amber-500.text-stone-950,
+.bg-amber-400.text-stone-950,
+.bg-amber-500.text-stone-900 {
+  color: var(--palette-on-solid) !important;
+}
+
 body {
   font-family: var(--font-sans);
-  background-color: #171412;
+  background-color: color-mix(in srgb, #141210 95%, var(--palette-700));
   color: #f5f5f4;
   transition: background-color 0.25s ease, color 0.25s ease;
   overflow-x: hidden;
 }
 
-/* Soften stone-950 in dark mode so it is a warm deep espresso-slate instead of harsh pitch black */
+/* Soften stone-950/900 in dark mode and blend subtly with selected color palette */
 html.dark .bg-stone-950 {
-  background-color: #171412;
+  background-color: color-mix(in srgb, #12100e 95%, var(--palette-700));
 }
 html.dark .bg-stone-950\/95 {
-  background-color: rgba(23, 20, 18, 0.95);
+  background-color: color-mix(in srgb, rgba(18, 16, 14, 0.95) 95%, var(--palette-700));
+}
+html.dark .bg-stone-900 {
+  background-color: color-mix(in srgb, #1c1917 94%, var(--palette-700));
 }
 
 .tabular-nums {
@@ -144,35 +262,35 @@ html.dark .bg-stone-950\/95 {
 
 html.light,
 html.light body {
-  background-color: #fafaf9;
+  background-color: color-mix(in srgb, #fafaf9 92%, var(--palette-300));
   color: #1c1917;
 }
 
-/* Background surfaces */
+/* Background surfaces blended smoothly with selected color palette in Light mode */
 html.light .bg-stone-950 {
-  background-color: #ffffff !important;
+  background-color: color-mix(in srgb, #ffffff 94%, var(--palette-200)) !important;
 }
 
 html.light .bg-stone-950\/90,
 html.light .bg-stone-950\/95,
 html.light .bg-stone-950\/80 {
-  background-color: rgba(255, 255, 255, 0.95) !important;
+  background-color: color-mix(in srgb, rgba(255, 255, 255, 0.94) 94%, var(--palette-200)) !important;
 }
 
 html.light .bg-stone-900 {
-  background-color: #f5f5f4 !important;
+  background-color: color-mix(in srgb, #ffffff 97%, var(--palette-200)) !important;
 }
 
 html.light .bg-stone-900\/60,
 html.light .bg-stone-900\/70,
 html.light .bg-stone-900\/80,
 html.light .bg-stone-900\/90 {
-  background-color: rgba(245, 245, 244, 0.92) !important;
+  background-color: color-mix(in srgb, rgba(255, 255, 255, 0.93) 95%, var(--palette-200)) !important;
 }
 
 html.light .bg-stone-850,
 html.light .bg-stone-800 {
-  background-color: #e7e5e4 !important;
+  background-color: color-mix(in srgb, #e7e5e4 88%, var(--palette-300)) !important;
 }
 
 html.light .bg-stone-800\/80,
@@ -180,7 +298,7 @@ html.light .bg-stone-800\/60,
 html.light .bg-stone-800\/50,
 html.light .bg-stone-800\/40,
 html.light .bg-stone-800\/30 {
-  background-color: rgba(231, 229, 228, 0.75) !important;
+  background-color: color-mix(in srgb, rgba(231, 229, 228, 0.78) 88%, var(--palette-300)) !important;
 }
 
 /* Borders */
@@ -189,15 +307,15 @@ html.light .border-stone-800\/80,
 html.light .border-stone-800\/60,
 html.light .border-stone-800\/40,
 html.light .border-stone-700 {
-  border-color: #d6d3d1 !important;
+  border-color: color-mix(in srgb, #d6d3d1 82%, var(--palette-400)) !important;
 }
 
 html.light .border-stone-900 {
-  border-color: #e7e5e4 !important;
+  border-color: color-mix(in srgb, #e7e5e4 85%, var(--palette-300)) !important;
 }
 
 html.light .divide-stone-800 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #e7e5e4 !important;
+  border-color: color-mix(in srgb, #e7e5e4 85%, var(--palette-300)) !important;
 }
 
 /* High Contrast Typography */
@@ -221,30 +339,39 @@ html.light .text-stone-500 {
   color: #57534e !important;
 }
 
-/* High Contrast Amber Accents */
+/* High Contrast Theme Accents in Light Mode (WCAG AA compliant) */
+html.light .text-amber-500 {
+  color: var(--palette-600) !important;
+}
+
 html.light .text-amber-400 {
-  color: #b45309 !important;
+  color: var(--palette-700) !important;
 }
 
 html.light .text-amber-300 {
-  color: #92400e !important;
+  color: var(--palette-700) !important;
 }
 
 html.light .text-amber-200 {
-  color: #78350f !important;
+  color: var(--palette-800) !important;
 }
 
 html.light .bg-amber-500\/10 {
-  background-color: rgba(217, 119, 6, 0.12) !important;
+  background-color: color-mix(in srgb, var(--palette-500) 12%, transparent) !important;
+}
+
+html.light .bg-amber-500\/15 {
+  background-color: color-mix(in srgb, var(--palette-500) 16%, transparent) !important;
 }
 
 html.light .bg-amber-500\/20 {
-  background-color: rgba(217, 119, 6, 0.2) !important;
+  background-color: color-mix(in srgb, var(--palette-500) 20%, transparent) !important;
 }
 
 html.light .border-amber-500\/40,
+html.light .border-amber-500\/35,
 html.light .border-amber-500\/30 {
-  border-color: rgba(180, 83, 9, 0.45) !important;
+  border-color: color-mix(in srgb, var(--palette-600) 45%, transparent) !important;
 }
 
 /* Status Accents */
@@ -268,31 +395,35 @@ html.light .text-purple-400 {
 html.light .from-stone-900.to-stone-950,
 html.light .from-stone-900\/60.to-stone-950\/60,
 html.light .from-stone-900.via-stone-900\/80.to-stone-950 {
-  background-image: linear-gradient(to bottom, #ffffff, #f5f5f4) !important;
+  background-image: linear-gradient(
+    to bottom right,
+    color-mix(in srgb, #ffffff 95%, var(--palette-200)),
+    color-mix(in srgb, #f5f5f4 90%, var(--palette-300))
+  ) !important;
 }
 
 html.light .from-amber-950\/20,
 html.light .from-amber-950\/30 {
-  --tw-gradient-from: rgba(254, 243, 199, 0.5) !important;
+  --tw-gradient-from: color-mix(in srgb, var(--palette-200) 45%, transparent) !important;
 }
 
 html.light .to-stone-950\/80,
 html.light .to-stone-950 {
-  --tw-gradient-to: #ffffff !important;
+  --tw-gradient-to: color-mix(in srgb, #ffffff 94%, var(--palette-200)) !important;
 }
 
 /* SVG stroke styling */
 html.light .stroke-stone-800 {
-  stroke: #e7e5e4 !important;
+  stroke: color-mix(in srgb, #e7e5e4 85%, var(--palette-300)) !important;
 }
 html.light .stroke-stone-700 {
-  stroke: #d6d3d1 !important;
+  stroke: color-mix(in srgb, #d6d3d1 82%, var(--palette-400)) !important;
 }
 html.light .stroke-amber-500 {
-  stroke: #d97706 !important;
+  stroke: var(--palette-600) !important;
 }
 html.light .fill-stone-900 {
-  fill: #f5f5f4 !important;
+  fill: color-mix(in srgb, #f5f5f4 92%, var(--palette-200)) !important;
 }
 
 /* Inputs, Textareas, & Selects */
@@ -339,5 +470,5 @@ html.light ::-webkit-scrollbar-thumb {
   background: #d6d3d1;
 }
 html.light ::-webkit-scrollbar-thumb:hover {
-  background: #b45309;
+  background: var(--palette-700);
 }

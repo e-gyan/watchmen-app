@@ -2786,28 +2786,35 @@ export class FirebaseService {
     const sessions = this.filteredSessions();
     if (sessions.length === 0) return 0;
 
-    const uniqueDates = Array.from(new Set(sessions.map((s) => s.date))).sort().reverse();
-    const today = this.getTodayDateString();
-    const yesterday = this.getYesterdayDateString();
+    // Only count Mon–Sat prayer days with > 0 minutes logged; Sunday is a rest day.
+    const prayedDateSet = new Set<string>();
+    for (const s of sessions) {
+      if (s.durationMinutes > 0 && this.isPrayerWeekDayStr(s.date)) {
+        prayedDateSet.add(s.date);
+      }
+    }
+    if (prayedDateSet.size === 0) return 0;
 
-    if (!uniqueDates.includes(today) && !uniqueDates.includes(yesterday)) {
-      return 0;
+    const cursor = new Date();
+    // If today is Sunday (rest day), anchor check at Saturday (most recent scheduled prayer day)
+    if (cursor.getDay() === 0) {
+      cursor.setDate(cursor.getDate() - 1);
+    }
+
+    const anchorStr = this.formatDate(cursor);
+    if (!prayedDateSet.has(anchorStr)) {
+      // Today (Mon–Sat) hasn't been logged yet: check previous scheduled prayer day
+      // (which steps from Monday cleanly back to Saturday, skipping Sunday)
+      this.stepBackPrayerDay(cursor);
+      if (!prayedDateSet.has(this.formatDate(cursor))) {
+        return 0;
+      }
     }
 
     let streak = 0;
-    const checkDate = new Date();
-    if (!uniqueDates.includes(today)) {
-      checkDate.setDate(checkDate.getDate() - 1);
-    }
-
-    while (true) {
-      const dateStr = this.formatDate(checkDate);
-      if (uniqueDates.includes(dateStr)) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        break;
-      }
+    while (prayedDateSet.has(this.formatDate(cursor))) {
+      streak++;
+      this.stepBackPrayerDay(cursor);
     }
 
     return streak;
@@ -3124,6 +3131,40 @@ export class FirebaseService {
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
+  }
+
+  isPrayerWeekDay(d: Date): boolean {
+    return d.getDay() !== 0; // Monday (1) through Saturday (6)
+  }
+
+  isPrayerWeekDayStr(dateStr: string): boolean {
+    const [y, m, day] = dateStr.split('-').map(Number);
+    if (!y || !m || !day) return false;
+    const d = new Date(y, m - 1, day);
+    return d.getDay() !== 0;
+  }
+
+  stepBackPrayerDay(d: Date): void {
+    d.setDate(d.getDate() - 1);
+    if (d.getDay() === 0) {
+      d.setDate(d.getDate() - 1);
+    }
+  }
+
+  getCurrentPrayerWeekDates(): string[] {
+    const dates: string[] = [];
+    const now = new Date();
+    const day = now.getDay();
+    const distanceToMonday = (day + 6) % 7;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - distanceToMonday);
+
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      dates.push(this.formatDate(d));
+    }
+    return dates;
   }
 
   private getCurrentWeekDates(): string[] {

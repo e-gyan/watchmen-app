@@ -27,13 +27,25 @@
       (function() {
         try {
           var pref = localStorage.getItem('watchman_theme_pref');
+          var palette = localStorage.getItem('watchman_color_palette') || 'amber';
+          var validPalettes = ['emerald', 'teal', 'indigo', 'amber', 'rose', 'fuchsia', 'slate', 'cyan', 'sky'];
+          if (validPalettes.indexOf(palette) === -1) palette = 'amber';
+          document.documentElement.setAttribute('data-palette', palette);
+
           var now = new Date();
           var mins = now.getHours() * 60 + now.getMinutes();
           var scheduled = (mins >= 405 && mins < 1125) ? 'light' : 'dark';
-          var mode = (pref === 'light' || pref === 'dark') ? pref : scheduled;
+          var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var mode = scheduled;
+          if (pref === 'light' || pref === 'dark') {
+            mode = pref;
+          } else if (pref === 'auto') {
+            mode = systemDark ? 'dark' : 'light';
+          }
           document.documentElement.classList.remove('light', 'dark');
           document.documentElement.classList.add(mode);
         } catch (e) {
+          document.documentElement.setAttribute('data-palette', 'amber');
           document.documentElement.classList.add('light');
         }
       })();

@@ -204,20 +204,20 @@ import { MessageListeningRecord } from '../models/prayer.model';
                     type="button"
                     [disabled]="isSaving()"
                     (click)="repeatInitialTime(msg)"
-                    class="flex-1 sm:flex-initial flex items-center justify-center gap-1 py-2 sm:py-1.5 px-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors disabled:opacity-50"
+                    class="min-w-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 py-2 sm:py-1.5 px-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors disabled:opacity-50"
                     title="Repeat initial recorded listening time"
                   >
-                    <mat-icon style="font-size: 15px;">replay</mat-icon>
+                    <mat-icon class="shrink-0" style="font-size: 15px;">replay</mat-icon>
                     <span class="truncate">Repeat (+{{ firebaseService.formatMinutes(baseMins) }})</span>
                   </button>
 
                   <button
                     type="button"
                     (click)="openAddTimeModal(msg)"
-                    class="flex-1 sm:flex-initial flex items-center justify-center gap-1 py-2 sm:py-1.5 px-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 text-xs font-semibold transition-colors"
+                    class="min-w-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 py-2 sm:py-1.5 px-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 text-xs font-semibold transition-colors"
                     title="Add more listening time to this message"
                   >
-                    <mat-icon style="font-size: 15px;">more_time</mat-icon>
+                    <mat-icon class="shrink-0" style="font-size: 15px;">more_time</mat-icon>
                     <span class="truncate">+ Add Time</span>
                   </button>
 
