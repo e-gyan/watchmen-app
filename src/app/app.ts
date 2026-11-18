@@ -976,8 +976,23 @@ export class App implements OnInit, OnDestroy {
     }
   }
 
-  // Keyboard Left/Right Arrow Navigation Across Bottom Menu Bar Options
+  // Keyboard Escape & Left/Right Arrow Navigation Across Bottom Menu Bar Options
   onWindowKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      if (this.deleteConfirmation()) {
+        this.cancelDelete();
+        return;
+      }
+      if (this.pwaService.showInstallGuide()) {
+        this.pwaService.closeInstallGuide();
+        return;
+      }
+      if (this.showHeaderMenu()) {
+        this.closeHeaderMenu();
+        return;
+      }
+    }
+
     if (!this.firebaseService.slideConfig().enabled) return;
     if (
       this.showHeaderMenu() ||
@@ -988,7 +1003,9 @@ export class App implements OnInit, OnDestroy {
       this.showCreateCircleModal() ||
       this.showAddPartnerModal() ||
       this.showAuthModal() ||
-      this.deleteConfirmation()
+      this.deleteConfirmation() ||
+      this.pwaService.showInstallGuide() ||
+      (typeof document !== 'undefined' && !!document.querySelector('[data-no-swipe="true"]'))
     ) {
       return;
     }

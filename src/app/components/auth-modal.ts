@@ -8,15 +8,25 @@ import { FirebaseService } from '../services/firebase.service';
   selector: 'app-auth-modal',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, ReactiveFormsModule, MatIconModule],
+  host: {
+    '(window:keydown.escape)': 'dismiss.emit()',
+  },
   template: `
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
+      data-no-swipe="true"
+      class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-labelledby="auth-modal-title"
     >
+      <button
+        type="button"
+        aria-label="Close sign in modal"
+        (click)="dismiss.emit()"
+        class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+      ></button>
       <div
-        class="bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl my-8"
+        class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl my-auto"
       >
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-stone-800 bg-stone-950/50">

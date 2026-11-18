@@ -335,23 +335,23 @@
     (touchstart)="onTouchStart($event)"
     (touchmove)="onTouchMove($event)"
     (touchend)="onTouchEnd()"
-    class="fixed bottom-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-t border-stone-800 px-1.5 sm:px-3 py-1.5 select-none"
+    class="fixed bottom-0 left-0 right-0 z-40 bg-stone-950/95 backdrop-blur-md border-t border-stone-800 px-2 sm:px-3 py-1.5 select-none"
   >
     <div class="max-w-3xl mx-auto flex items-center gap-1">
-      <!-- Slide Left Button -->
+      <!-- Slide Left Button (Desktop / Tablet helper; mobile users tap or swipe) -->
       <button
         type="button"
         (click)="slidePrevTab()"
         [disabled]="!canSlidePrev()"
-        class="p-1.5 rounded-xl text-stone-400 hover:text-amber-400 hover:bg-stone-900 disabled:opacity-25 disabled:pointer-events-none transition-colors shrink-0"
+        class="hidden sm:inline-flex p-1.5 rounded-xl text-stone-400 hover:text-amber-400 hover:bg-stone-900 disabled:opacity-25 disabled:pointer-events-none transition-colors shrink-0"
         title="Slide left to previous menu option"
         aria-label="Slide left to previous menu option"
       >
         <mat-icon style="font-size: 18px;">chevron_left</mat-icon>
       </button>
 
-      <!-- Sliding Menu Track -->
-      <div class="relative flex-1 flex items-center">
+      <!-- Sliding Menu Track (Full width 5-column grid on mobile) -->
+      <div class="relative flex-1 grid grid-cols-5 items-center">
         <!-- Smoothly Gliding Active Pill Indicator (Synced with Backend Slide Config) -->
         @if (isBottomBarTab() && firebaseService.bottomNavItems().length > 0) {
           <div
@@ -370,7 +370,7 @@
           <button
             type="button"
             (click)="setTab(item.id)"
-            class="relative z-10 flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] py-1.5 px-1 rounded-xl transition-colors"
+            class="relative z-10 w-full flex flex-col items-center justify-center gap-0.5 text-[10px] sm:text-[11px] py-1.5 px-1 rounded-xl transition-colors"
             [class]="
               activeTab() === item.id
                 ? 'text-amber-400 font-bold'
@@ -378,17 +378,17 @@
             "
           >
             <mat-icon style="font-size: 20px;">{{ item.icon }}</mat-icon>
-            <span class="truncate max-w-full">{{ item.label }}</span>
+            <span class="truncate max-w-full leading-tight">{{ item.label }}</span>
           </button>
         }
       </div>
 
-      <!-- Slide Right Button -->
+      <!-- Slide Right Button (Desktop / Tablet helper; mobile users tap or swipe) -->
       <button
         type="button"
         (click)="slideNextTab()"
         [disabled]="!canSlideNext()"
-        class="p-1.5 rounded-xl text-stone-400 hover:text-amber-400 hover:bg-stone-900 disabled:opacity-25 disabled:pointer-events-none transition-colors shrink-0"
+        class="hidden sm:inline-flex p-1.5 rounded-xl text-stone-400 hover:text-amber-400 hover:bg-stone-900 disabled:opacity-25 disabled:pointer-events-none transition-colors shrink-0"
         title="Slide right to next menu option"
         aria-label="Slide right to next menu option"
       >
@@ -476,26 +476,20 @@
 
     <!-- CASE 3: AUTHENTICATED AND HAS ACTIVE PRAYER CIRCLE -->
     @else {
-      <!-- HORIZONTAL LEFT/RIGHT SLIDING CAROUSEL FOR BOTTOM MENU BAR OPTIONS -->
+      <!-- HORIZONTAL LEFT/RIGHT SLIDING VIEWS FOR BOTTOM MENU BAR OPTIONS -->
       @if (isBottomBarTab()) {
         <div
-          class="overflow-hidden w-full"
+          class="w-full"
           (touchstart)="onTouchStart($event)"
           (touchmove)="onTouchMove($event)"
           (touchend)="onTouchEnd()"
+          [style.transform]="isSwiping() ? 'translate3d(' + swipeOffsetPx() + 'px, 0, 0)' : 'none'"
+          [style.transition]="isSwiping() ? 'none' : 'transform 200ms ease-out'"
         >
-          <div
-            class="flex w-full items-start will-change-transform"
-            [style.transform]="carouselTrackTransform()"
-            [style.transition]="carouselTrackTransition()"
-          >
-            <!-- TAB 1: DASHBOARD & TARGETS -->
+          <!-- TAB 1: DASHBOARD & TARGETS -->
+          @if (activeTab() === 'dashboard') {
             <section
-              [class]="
-                activeTab() === 'dashboard' || isSlideAnimating() || isSwiping()
-                  ? 'w-full shrink-0 space-y-6'
-                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none space-y-6'
-              "
+              [class]="tabSlideDirection() === 'next' ? 'view-slide-next space-y-6' : 'view-slide-prev space-y-6'"
             >
               @if (firebaseService.activePartnership(); as activeP) {
             <!-- Hero Period Covenant Card -->
@@ -607,7 +601,7 @@
                 }
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <!-- 1. Prayer Journal Total -->
                 <button
                   type="button"
@@ -1075,11 +1069,11 @@
                         </div>
                       </div>
 
-                      <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                      <div class="flex flex-wrap items-center justify-end gap-1.5 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-800/60 shrink-0">
                         <button
                           type="button"
                           (click)="setTab(rec.tab)"
-                          class="py-1 px-2.5 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 text-[11px] font-medium flex items-center gap-1"
+                          class="py-1.5 px-3 rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 text-[11px] font-medium flex items-center gap-1"
                         >
                           <mat-icon style="font-size: 13px;">open_in_new</mat-icon>
                           <span>View</span>
@@ -1088,7 +1082,7 @@
                           <button
                             type="button"
                             (click)="confirmDelete('authority', rec.authorityId)"
-                            class="py-1 px-2 rounded-lg bg-stone-900 hover:bg-red-950/60 text-stone-400 hover:text-red-300 border border-stone-800 text-[11px] flex items-center gap-1"
+                            class="py-1.5 px-2.5 rounded-lg bg-stone-900 hover:bg-red-950/60 text-stone-400 hover:text-red-300 border border-stone-800 text-[11px] flex items-center gap-1"
                             title="Delete Seed Target and all its saved seeds"
                           >
                             <mat-icon style="font-size: 13px;">delete_sweep</mat-icon>
@@ -1098,7 +1092,7 @@
                         <button
                           type="button"
                           (click)="confirmDelete(rec.type === 'prayer' ? 'session' : (rec.type === 'petition' ? 'request' : rec.type), rec.id)"
-                          class="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-900"
+                          class="p-1.5 rounded-lg text-stone-500 hover:text-red-400 hover:bg-stone-900 border border-stone-800/60"
                           title="Delete Record"
                         >
                           <mat-icon style="font-size: 15px;">delete</mat-icon>
@@ -1112,7 +1106,7 @@
 
             <!-- Circle Visibility & Accountability Roster -->
             <div class="rounded-2xl bg-stone-900 border border-stone-800 p-6 space-y-4">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800/80 pb-3">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800/80 pb-3">
                 <div>
                   <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
                     {{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'Individual Private Space' : 'Shared Partner Circle' }}
@@ -1122,11 +1116,11 @@
                   </h3>
                 </div>
 
-                <div class="flex items-center gap-2 shrink-0">
+                <div class="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
                   <button
                     type="button"
                     (click)="showCreateCircleModal.set(true)"
-                    class="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-medium text-stone-200 border border-stone-700 transition-colors"
+                    class="flex items-center justify-center gap-1.5 py-2 sm:py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-medium text-stone-200 border border-stone-700 transition-colors"
                   >
                     <mat-icon style="font-size: 16px;">add_circle_outline</mat-icon>
                     <span>New Circle</span>
@@ -1134,10 +1128,10 @@
                   <button
                     type="button"
                     (click)="showAddPartnerModal.set(true)"
-                    class="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-amber-300 border border-stone-700 transition-colors"
+                    class="flex items-center justify-center gap-1.5 py-2 sm:py-1.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-amber-300 border border-stone-700 transition-colors"
                   >
                     <mat-icon style="font-size: 16px;">person_add</mat-icon>
-                    <span>{{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'Add Partner to Share' : 'Invite Partner' }}</span>
+                    <span class="truncate">{{ (activeP.circleType === 'individual' || activeP.memberEmails.length <= 1) ? 'Add Partner' : 'Invite Partner' }}</span>
                   </button>
                 </div>
               </div>
@@ -1176,40 +1170,34 @@
             </div>
               }
             </section>
+          }
 
-            <!-- TAB 2: MESSAGE LISTENING TRACKER -->
+          <!-- TAB 2: MESSAGE LISTENING TRACKER -->
+          @if (activeTab() === 'messages') {
             <section
-              [class]="
-                activeTab() === 'messages' || isSlideAnimating() || isSwiping()
-                  ? 'w-full shrink-0'
-                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none'
-              "
+              [class]="tabSlideDirection() === 'next' ? 'view-slide-next' : 'view-slide-prev'"
             >
               <app-messages-tracker
                 (saved)="showToast($event)"
               />
             </section>
+          }
 
-            <!-- TAB 3: AUTHORITY FIGURE SEED TRACKER -->
+          <!-- TAB 3: AUTHORITY FIGURE SEED TRACKER -->
+          @if (activeTab() === 'seeds') {
             <section
-              [class]="
-                activeTab() === 'seeds' || isSlideAnimating() || isSwiping()
-                  ? 'w-full shrink-0'
-                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none'
-              "
+              [class]="tabSlideDirection() === 'next' ? 'view-slide-next' : 'view-slide-prev'"
             >
               <app-seed-tracker
                 (saved)="showToast($event)"
               />
             </section>
+          }
 
-            <!-- TAB 4: SESSION JOURNAL (Minimalist Cards + Group by Day, Week, Month, Year, Custom, All) -->
+          <!-- TAB 4: SESSION JOURNAL (Minimalist Cards + Group by Day, Week, Month, Year, Custom, All) -->
+          @if (activeTab() === 'journal') {
             <section
-              [class]="
-                activeTab() === 'journal' || isSlideAnimating() || isSwiping()
-                  ? 'w-full shrink-0 space-y-5'
-                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none space-y-5'
-              "
+              [class]="tabSlideDirection() === 'next' ? 'view-slide-next space-y-5' : 'view-slide-prev space-y-5'"
             >
               <!-- Header & Primary Action -->
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-800/80">
@@ -1226,13 +1214,13 @@
               </p>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2.5 shrink-0">
-              <!-- Group By Segmented Selector: Day, Week, Month, Year, Custom, All -->
-              <div class="flex flex-wrap items-center bg-stone-900 border border-stone-800 rounded-xl p-1 text-xs gap-0.5">
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto shrink-0">
+              <!-- Group By Segmented Selector: Day, Week, Month, Year, Custom, All (3x2 grid on mobile, inline flex on desktop) -->
+              <div class="grid grid-cols-3 sm:flex items-center bg-stone-900 border border-stone-800 rounded-xl p-1 text-xs gap-1 w-full sm:w-auto">
                 <button
                   type="button"
                   (click)="journalGroupMode.set('day')"
-                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all text-center whitespace-nowrap"
                   [class]="
                     journalGroupMode() === 'day'
                       ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
@@ -1244,7 +1232,7 @@
                 <button
                   type="button"
                   (click)="journalGroupMode.set('week')"
-                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all text-center whitespace-nowrap"
                   [class]="
                     journalGroupMode() === 'week'
                       ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
@@ -1256,7 +1244,7 @@
                 <button
                   type="button"
                   (click)="journalGroupMode.set('month')"
-                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all text-center whitespace-nowrap"
                   [class]="
                     journalGroupMode() === 'month'
                       ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
@@ -1268,7 +1256,7 @@
                 <button
                   type="button"
                   (click)="journalGroupMode.set('year')"
-                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all text-center whitespace-nowrap"
                   [class]="
                     journalGroupMode() === 'year'
                       ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
@@ -1280,7 +1268,7 @@
                 <button
                   type="button"
                   (click)="journalGroupMode.set('custom')"
-                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all text-center whitespace-nowrap"
                   [class]="
                     journalGroupMode() === 'custom'
                       ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
@@ -1292,7 +1280,7 @@
                 <button
                   type="button"
                   (click)="journalGroupMode.set('all')"
-                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all whitespace-nowrap shrink-0"
+                  class="px-2.5 py-1.5 rounded-lg font-medium transition-all text-center whitespace-nowrap"
                   [class]="
                     journalGroupMode() === 'all'
                       ? 'bg-amber-500 text-stone-950 font-bold shadow-xs'
@@ -1306,7 +1294,7 @@
               <button
                 type="button"
                 (click)="openNewSessionModal()"
-                class="flex items-center gap-1.5 py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-all shadow-md shrink-0"
+                class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-md shrink-0"
               >
                 <mat-icon style="font-size: 18px;">add</mat-icon>
                 <span>Log Prayer</span>
@@ -1340,32 +1328,32 @@
                 </div>
               </div>
 
-              <div class="flex flex-wrap items-center gap-1.5">
+              <div class="grid grid-cols-2 sm:flex items-center gap-1.5 w-full sm:w-auto">
                 <button
                   type="button"
                   (click)="setCustomRangePreset('7d')"
-                  class="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300"
+                  class="px-2.5 py-2 sm:py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300 text-center"
                 >
                   Last 7D
                 </button>
                 <button
                   type="button"
                   (click)="setCustomRangePreset('30d')"
-                  class="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300"
+                  class="px-2.5 py-2 sm:py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300 text-center"
                 >
                   Last 30D
                 </button>
                 <button
                   type="button"
                   (click)="setCustomRangePreset('90d')"
-                  class="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300"
+                  class="px-2.5 py-2 sm:py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300 text-center"
                 >
                   Last 90D
                 </button>
                 <button
                   type="button"
                   (click)="setCustomRangePreset('year')"
-                  class="px-2.5 py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300"
+                  class="px-2.5 py-2 sm:py-1.5 rounded-lg bg-stone-950 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300 text-center"
                 >
                   This Year
                 </button>
@@ -1630,18 +1618,16 @@
             }
           }
             </section>
+          }
 
-            <!-- TAB 5: ANALYTICS & INSIGHTS -->
+          <!-- TAB 5: ANALYTICS & INSIGHTS -->
+          @if (activeTab() === 'analytics') {
             <section
-              [class]="
-                activeTab() === 'analytics' || isSlideAnimating() || isSwiping()
-                  ? 'w-full shrink-0'
-                  : 'w-full shrink-0 h-0 overflow-hidden opacity-0 pointer-events-none'
-              "
+              [class]="tabSlideDirection() === 'next' ? 'view-slide-next' : 'view-slide-prev'"
             >
               <app-analytics-tracker />
             </section>
-          </div>
+          }
         </div>
       }
 
@@ -1664,7 +1650,7 @@
             <button
               type="button"
               (click)="openNewTestimonyModal()"
-              class="flex items-center gap-1.5 py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-all shadow-md shrink-0"
+              class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-95 transition-all shadow-md shrink-0"
             >
               <mat-icon style="font-size: 18px;">add</mat-icon>
               <span>Add Testimony</span>
@@ -1939,11 +1925,11 @@
                   </p>
                 </div>
 
-                <div class="flex items-center gap-2 shrink-0">
+                <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
                   <button
                     type="button"
                     (click)="runDailyActivityAlertCheck(true)"
-                    class="flex items-center gap-1.5 py-1.5 px-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 text-xs font-semibold transition-colors"
+                    class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2 sm:py-1.5 px-3.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 text-xs font-semibold transition-colors"
                     title="Run immediate check for today's prayer and message records"
                   >
                     <mat-icon style="font-size: 16px;">notifications_active</mat-icon>
@@ -2084,7 +2070,7 @@
                   <button
                     type="submit"
                     [disabled]="isSavingAlerts()"
-                    class="flex items-center gap-1.5 py-2 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold disabled:opacity-50 shadow-md"
+                    class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-semibold disabled:opacity-50 shadow-md"
                   >
                     <mat-icon style="font-size: 16px;">save</mat-icon>
                     <span>{{ isSavingAlerts() ? 'Saving...' : 'Save Alert Parameters' }}</span>
@@ -2108,7 +2094,7 @@
                 <button
                   type="button"
                   (click)="openNewRequestModal()"
-                  class="flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-stone-200 border border-stone-700 transition-all shrink-0"
+                  class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2 sm:py-1.5 px-3.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-xs font-semibold text-stone-200 border border-stone-700 transition-all shrink-0"
                 >
                   <mat-icon style="font-size: 16px;">add</mat-icon>
                   <span>Add Request</span>
@@ -2293,29 +2279,42 @@
   <!-- Delete Confirmation Modal -->
   @if (deleteConfirmation()) {
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+      class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in"
       role="dialog"
       aria-modal="true"
+      data-no-swipe="true"
     >
-      <div class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
-        <h3 class="text-base font-serif font-bold text-stone-100">Delete Record</h3>
+      <button
+        type="button"
+        aria-label="Close delete confirmation"
+        (click)="cancelDelete()"
+        class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+      ></button>
+      <div
+        class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-5 sm:p-6 space-y-4 shadow-2xl"
+      >
+        <div class="flex items-center gap-2.5 text-red-400">
+          <mat-icon style="font-size: 20px;">warning_amber</mat-icon>
+          <h3 class="text-base font-serif font-bold text-stone-100">Delete Record</h3>
+        </div>
         <p class="text-xs text-stone-400">
           Delete this record permanently?
         </p>
-        <div class="flex items-center justify-end gap-3 pt-2">
+        <div class="grid grid-cols-2 sm:flex items-center justify-end gap-2.5 pt-2">
           <button
             type="button"
             (click)="cancelDelete()"
-            class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+            class="w-full sm:w-auto py-2.5 sm:py-2 px-4 rounded-xl text-xs font-medium text-stone-300 bg-stone-800/80 hover:bg-stone-800 hover:text-stone-100 transition-colors text-center"
           >
             Cancel
           </button>
           <button
             type="button"
             (click)="executeDelete()"
-            class="py-2 px-4 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white"
+            class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white transition-all"
           >
-            Delete
+            <mat-icon style="font-size: 15px;">delete</mat-icon>
+            <span>Delete</span>
           </button>
         </div>
       </div>
@@ -2325,11 +2324,20 @@
   <!-- PWA Install Guide Modal (Android / iOS / Desktop) -->
   @if (pwaService.showInstallGuide()) {
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+      class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in"
       role="dialog"
       aria-modal="true"
+      data-no-swipe="true"
     >
-      <div class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-6 space-y-4 shadow-2xl">
+      <button
+        type="button"
+        aria-label="Close install guide overlay"
+        (click)="pwaService.closeInstallGuide()"
+        class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+      ></button>
+      <div
+        class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-5 sm:p-6 space-y-4 shadow-2xl"
+      >
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <mat-icon class="text-amber-400" style="font-size: 20px;">install_mobile</mat-icon>
@@ -2338,7 +2346,8 @@
           <button
             type="button"
             (click)="pwaService.closeInstallGuide()"
-            class="p-1 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+            class="p-1.5 rounded-xl text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors"
+            aria-label="Close install guide"
           >
             <mat-icon style="font-size: 18px;">close</mat-icon>
           </button>
@@ -2356,24 +2365,25 @@
           </div>
         }
 
-        <div class="pt-2 border-t border-stone-800 flex items-center justify-between gap-2">
+        <div class="pt-2 border-t border-stone-800 grid grid-cols-2 sm:flex items-center justify-between gap-2.5">
           @if (pwaService.notificationStatus() !== 'unsupported' && pwaService.notificationStatus() !== 'granted') {
             <button
               type="button"
               (click)="enableNotificationAlerts()"
-              class="py-2 px-3 rounded-xl text-xs font-medium bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 flex items-center gap-1"
+              class="w-full sm:w-auto py-2.5 sm:py-2 px-3 rounded-xl text-xs font-medium bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 flex items-center justify-center gap-1"
             >
               <mat-icon style="font-size: 15px;">notifications</mat-icon>
               <span>Enable Alerts</span>
             </button>
           } @else {
-            <span></span>
+            <span class="hidden sm:inline"></span>
           }
 
           <button
             type="button"
             (click)="pwaService.closeInstallGuide()"
-            class="py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
+            class="w-full sm:w-auto py-2.5 sm:py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 text-center"
+            [class.col-span-2]="pwaService.notificationStatus() === 'unsupported' || pwaService.notificationStatus() === 'granted'"
           >
             Done
           </button>

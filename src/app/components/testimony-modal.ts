@@ -16,14 +16,24 @@ import { CATEGORY_COLOR_PALETTE, Testimony } from '../models/prayer.model';
   selector: 'app-testimony-modal',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [ReactiveFormsModule, MatIconModule],
+  host: {
+    '(window:keydown.escape)': 'dismiss.emit()',
+  },
   template: `
     <div
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+      data-no-swipe="true"
+      class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in overflow-y-auto"
       role="dialog"
       aria-modal="true"
     >
+      <button
+        type="button"
+        aria-label="Close testimony modal"
+        (click)="dismiss.emit()"
+        class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+      ></button>
       <div
-        class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl p-6 sm:p-8 space-y-6"
+        class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-xl max-h-[85dvh] overflow-y-auto shadow-2xl p-5 sm:p-7 space-y-5 my-auto"
       >
         <!-- Modal Header -->
         <div class="flex items-center justify-between border-b border-stone-800/80 pb-4">
@@ -205,18 +215,19 @@ import { CATEGORY_COLOR_PALETTE, Testimony } from '../models/prayer.model';
           </div>
 
           <!-- Modal Actions -->
-          <div class="flex items-center justify-end gap-3 pt-4 border-t border-stone-800/80">
+          <div class="grid grid-cols-2 sm:flex items-center justify-end gap-2.5 pt-4 border-t border-stone-800/80">
             <button
               type="button"
               (click)="dismiss.emit()"
-              class="py-2.5 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition-colors"
+              class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-medium text-stone-300 bg-stone-800/70 hover:bg-stone-800 hover:text-stone-100 transition-colors"
             >
-              Cancel
+              <mat-icon style="font-size: 15px;">close</mat-icon>
+              <span>Cancel</span>
             </button>
             <button
               type="submit"
               [disabled]="form.invalid || isSubmitting()"
-              class="flex items-center gap-2 py-2.5 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 disabled:pointer-events-none transition-all shadow-md"
+              class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 disabled:pointer-events-none transition-all shadow-md"
             >
               <mat-icon style="font-size: 18px;">celebration</mat-icon>
               <span>{{ isSubmitting() ? 'Saving...' : (testimonyToEdit() ? 'Update' : 'Save Testimony') }}</span>

@@ -53,13 +53,13 @@ interface SpeakerRankItem {
           </p>
         </div>
 
-        <!-- Period Selector -->
-        <div class="flex flex-wrap items-center gap-1 p-1 rounded-xl bg-stone-900 border border-stone-800">
+        <!-- Period Selector (5-column fit on mobile, inline flex on desktop) -->
+        <div class="grid grid-cols-5 sm:flex items-center gap-1 p-1 rounded-xl bg-stone-900 border border-stone-800 w-full sm:w-auto">
           @for (p of periods; track p.id) {
             <button
               type="button"
               (click)="selectPeriod(p.id)"
-              class="py-1.5 px-3 rounded-lg text-xs font-semibold transition-all"
+              class="py-1.5 px-1.5 sm:px-3 rounded-lg text-[11px] sm:text-xs font-semibold transition-all text-center whitespace-nowrap"
               [class]="
                 selectedPeriod() === p.id
                   ? 'bg-amber-500 text-stone-950 shadow-sm'

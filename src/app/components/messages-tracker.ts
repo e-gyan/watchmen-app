@@ -16,10 +16,13 @@ import { MessageListeningRecord } from '../models/prayer.model';
   selector: 'app-messages-tracker',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, ReactiveFormsModule, MatIconModule],
+  host: {
+    '(window:keydown.escape)': 'closeAllModals()',
+  },
   template: `
     <div class="space-y-6">
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-800/80">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pb-4 border-b border-stone-800/80">
         <div>
           <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
             Word Intake
@@ -35,7 +38,7 @@ import { MessageListeningRecord } from '../models/prayer.model';
         <button
           type="button"
           (click)="openForm()"
-          class="flex items-center gap-1.5 py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-all shadow-md shrink-0"
+          class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 active:scale-98 transition-all shadow-md shrink-0"
         >
           <mat-icon style="font-size: 18px;">add</mat-icon>
           <span>Log Message</span>
@@ -141,9 +144,10 @@ import { MessageListeningRecord } from '../models/prayer.model';
             <button
               type="button"
               (click)="openForm()"
-              class="py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400"
+              class="py-2.5 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 inline-flex items-center gap-1.5 shadow-md"
             >
-              Log Message
+              <mat-icon style="font-size: 16px;">add</mat-icon>
+              <span>Log Message</span>
             </button>
           }
         </div>
@@ -152,9 +156,9 @@ import { MessageListeningRecord } from '../models/prayer.model';
           @for (msg of filteredMessages(); track msg.id) {
             @let baseMins = msg.initialDurationMinutes || msg.durationMinutes;
             <div class="rounded-2xl bg-stone-900 border border-stone-800 p-4 sm:p-5 space-y-3 hover:border-stone-700 transition-all">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div class="space-y-1.5">
-                  <div class="flex flex-wrap items-center gap-2">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5">
+                <div class="space-y-1.5 min-w-0">
+                  <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
                     <span class="px-2.5 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-400 font-mono font-bold text-xs tabular-nums">
                       Total: {{ firebaseService.formatMinutes(msg.durationMinutes) }}
                       ({{ firebaseService.formatHours(msg.durationMinutes) }}h)
@@ -181,7 +185,7 @@ import { MessageListeningRecord } from '../models/prayer.model';
                   </div>
 
                   <div class="flex flex-wrap items-baseline gap-2">
-                    <h3 class="text-base font-serif font-bold text-stone-100">{{ msg.title }}</h3>
+                    <h3 class="text-base font-serif font-bold text-stone-100 break-words">{{ msg.title }}</h3>
                     @if (msg.speaker) {
                       <span class="text-xs text-amber-400/90 font-medium">— {{ msg.speaker }}</span>
                     }
@@ -194,45 +198,49 @@ import { MessageListeningRecord } from '../models/prayer.model';
                   }
                 </div>
 
-                <!-- Action Buttons: Open Add/Repeat Time Pop-Up, Edit Pop-Up, Delete -->
-                <div class="flex flex-wrap items-center gap-1.5 shrink-0 self-end sm:self-center">
+                <!-- Mobile-Fit Action Bar: Repeat, + Add Time, Edit, Delete -->
+                <div class="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-1.5 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-stone-800/70 shrink-0">
                   <button
                     type="button"
                     [disabled]="isSaving()"
                     (click)="repeatInitialTime(msg)"
-                    class="flex items-center gap-1 py-1.5 px-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors disabled:opacity-50"
+                    class="flex-1 sm:flex-initial flex items-center justify-center gap-1 py-2 sm:py-1.5 px-2.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors disabled:opacity-50"
                     title="Repeat initial recorded listening time"
                   >
                     <mat-icon style="font-size: 15px;">replay</mat-icon>
-                    <span>Repeat (+{{ firebaseService.formatMinutes(baseMins) }})</span>
+                    <span class="truncate">Repeat (+{{ firebaseService.formatMinutes(baseMins) }})</span>
                   </button>
 
                   <button
                     type="button"
                     (click)="openAddTimeModal(msg)"
-                    class="flex items-center gap-1 py-1.5 px-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 text-xs font-semibold transition-colors"
+                    class="flex-1 sm:flex-initial flex items-center justify-center gap-1 py-2 sm:py-1.5 px-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 text-xs font-semibold transition-colors"
                     title="Add more listening time to this message"
                   >
                     <mat-icon style="font-size: 15px;">more_time</mat-icon>
-                    <span>+ Add Time</span>
+                    <span class="truncate">+ Add Time</span>
                   </button>
 
-                  <button
-                    type="button"
-                    (click)="editRecord(msg)"
-                    class="p-1.5 rounded-lg text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition-colors"
-                    title="Edit Message"
-                  >
-                    <mat-icon style="font-size: 16px;">edit</mat-icon>
-                  </button>
-                  <button
-                    type="button"
-                    (click)="deleteRecord(msg.id)"
-                    class="p-1.5 rounded-lg text-stone-400 hover:text-red-400 hover:bg-stone-800 transition-colors"
-                    title="Delete Message"
-                  >
-                    <mat-icon style="font-size: 16px;">delete</mat-icon>
-                  </button>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      (click)="editRecord(msg)"
+                      class="p-2 sm:p-1.5 rounded-lg text-stone-400 hover:text-amber-400 hover:bg-stone-800 transition-colors"
+                      title="Edit Message"
+                      aria-label="Edit Message"
+                    >
+                      <mat-icon style="font-size: 16px;">edit</mat-icon>
+                    </button>
+                    <button
+                      type="button"
+                      (click)="confirmDeleteRecord(msg)"
+                      class="p-2 sm:p-1.5 rounded-lg text-stone-400 hover:text-red-400 hover:bg-stone-800 transition-colors"
+                      title="Delete Message"
+                      aria-label="Delete Message"
+                    >
+                      <mat-icon style="font-size: 16px;">delete</mat-icon>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -243,12 +251,19 @@ import { MessageListeningRecord } from '../models/prayer.model';
       <!-- POP-UP MODAL 1: Log / Edit Message -->
       @if (showForm()) {
         <div
-          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          data-no-swipe="true"
+          class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in overflow-y-auto"
           role="dialog"
           aria-modal="true"
         >
+          <button
+            type="button"
+            aria-label="Close message form overlay"
+            (click)="closeForm()"
+            class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+          ></button>
           <div
-            class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-5"
+            class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[85dvh] overflow-y-auto shadow-2xl p-5 sm:p-6 space-y-5 my-auto"
           >
             <div class="flex items-center justify-between border-b border-stone-800 pb-3">
               <div>
@@ -395,18 +410,19 @@ import { MessageListeningRecord } from '../models/prayer.model';
                 </div>
               }
 
-              <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-800">
+              <div class="grid grid-cols-2 sm:flex items-center justify-end gap-2.5 pt-3 border-t border-stone-800">
                 <button
                   type="button"
                   (click)="closeForm()"
-                  class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+                  class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-medium text-stone-300 bg-stone-800/70 hover:bg-stone-800 hover:text-stone-100"
                 >
-                  Cancel
+                  <mat-icon style="font-size: 15px;">close</mat-icon>
+                  <span>Cancel</span>
                 </button>
                 <button
                   type="submit"
                   [disabled]="isSaving()"
-                  class="flex items-center gap-1.5 py-2 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 shadow-md"
+                  class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 shadow-md"
                 >
                   <mat-icon style="font-size: 16px;">check</mat-icon>
                   <span>{{ isSaving() ? 'Saving...' : (editingMessage() ? 'Update' : 'Save') }}</span>
@@ -421,15 +437,22 @@ import { MessageListeningRecord } from '../models/prayer.model';
       @if (addingTimeMessage(); as targetMsg) {
         @let baseMins = targetMsg.initialDurationMinutes || targetMsg.durationMinutes;
         <div
-          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          data-no-swipe="true"
+          class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in overflow-y-auto"
           role="dialog"
           aria-modal="true"
         >
+          <button
+            type="button"
+            aria-label="Close add time overlay"
+            (click)="addingTimeMessage.set(null)"
+            class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+          ></button>
           <div
-            class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-md shadow-2xl p-6 space-y-5"
+            class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-md max-h-[85dvh] overflow-y-auto shadow-2xl p-5 sm:p-6 space-y-5 my-auto"
           >
             <div class="flex items-center justify-between border-b border-stone-800 pb-3">
-              <div>
+              <div class="min-w-0 pr-2">
                 <span class="text-[11px] font-semibold uppercase tracking-wider text-emerald-400">
                   Add Listening Time
                 </span>
@@ -440,7 +463,7 @@ import { MessageListeningRecord } from '../models/prayer.model';
               <button
                 type="button"
                 (click)="addingTimeMessage.set(null)"
-                class="text-stone-400 hover:text-stone-100 p-1.5 rounded-lg hover:bg-stone-800"
+                class="text-stone-400 hover:text-stone-100 p-1.5 rounded-lg hover:bg-stone-800 shrink-0"
                 aria-label="Close modal"
               >
                 <mat-icon style="font-size: 18px;">close</mat-icon>
@@ -504,24 +527,78 @@ import { MessageListeningRecord } from '../models/prayer.model';
                 </div>
               </div>
 
-              <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-800">
+              <div class="grid grid-cols-2 sm:flex items-center justify-end gap-2.5 pt-3 border-t border-stone-800">
                 <button
                   type="button"
                   (click)="addingTimeMessage.set(null)"
-                  class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+                  class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-medium text-stone-300 bg-stone-800/70 hover:bg-stone-800 hover:text-stone-100"
                 >
-                  Cancel
+                  <mat-icon style="font-size: 15px;">close</mat-icon>
+                  <span>Cancel</span>
                 </button>
                 <button
                   type="submit"
                   [disabled]="isSaving()"
-                  class="flex items-center gap-1.5 py-2 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-xs font-semibold disabled:opacity-50 shadow-md"
+                  class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-xs font-semibold disabled:opacity-50 shadow-md"
                 >
                   <mat-icon style="font-size: 16px;">check</mat-icon>
                   <span>Add to Total</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      }
+
+      <!-- POP-UP MODAL 3: Delete Message Confirmation -->
+      @if (deletingMessage(); as delMsg) {
+        <div
+          data-no-swipe="true"
+          class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            aria-label="Close delete message overlay"
+            (click)="deletingMessage.set(null)"
+            class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+          ></button>
+          <div
+            class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-5 sm:p-6 space-y-4 shadow-2xl"
+          >
+            <div class="flex items-center justify-between">
+              <h3 class="text-base font-serif font-bold text-stone-100">Delete Message</h3>
+              <button
+                type="button"
+                (click)="deletingMessage.set(null)"
+                class="text-stone-400 hover:text-stone-100 p-1 rounded-lg hover:bg-stone-800"
+                aria-label="Close modal"
+              >
+                <mat-icon style="font-size: 18px;">close</mat-icon>
+              </button>
+            </div>
+            <p class="text-xs text-stone-300 leading-relaxed">
+              Remove <strong>{{ delMsg.title }}</strong> from your message records?
+            </p>
+            <div class="grid grid-cols-2 sm:flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                (click)="deletingMessage.set(null)"
+                class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-medium text-stone-300 bg-stone-800/70 hover:bg-stone-800 hover:text-stone-100"
+              >
+                <mat-icon style="font-size: 15px;">close</mat-icon>
+                <span>Cancel</span>
+              </button>
+              <button
+                type="button"
+                (click)="executeDeleteRecord()"
+                class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white"
+              >
+                <mat-icon style="font-size: 15px;">delete</mat-icon>
+                <span>Delete</span>
+              </button>
+            </div>
           </div>
         </div>
       }
@@ -537,6 +614,7 @@ export class MessagesTracker {
   readonly errorMsg = signal<string | null>(null);
   readonly editingMessage = signal<MessageListeningRecord | null>(null);
   readonly addingTimeMessage = signal<MessageListeningRecord | null>(null);
+  readonly deletingMessage = signal<MessageListeningRecord | null>(null);
 
   // Filter & Sort state
   readonly searchQuery = signal('');
@@ -631,9 +709,18 @@ export class MessagesTracker {
       .reduce((sum, msg) => sum + (Number(msg.durationMinutes) || 0), 0);
   });
 
+  closeAllModals() {
+    this.showForm.set(false);
+    this.addingTimeMessage.set(null);
+    this.deletingMessage.set(null);
+    this.editingMessage.set(null);
+    this.errorMsg.set(null);
+  }
+
   openForm() {
     this.editingMessage.set(null);
     this.addingTimeMessage.set(null);
+    this.deletingMessage.set(null);
     this.errorMsg.set(null);
     this.form.reset({
       title: '',
@@ -650,6 +737,7 @@ export class MessagesTracker {
   editRecord(msg: MessageListeningRecord) {
     this.editingMessage.set(msg);
     this.addingTimeMessage.set(null);
+    this.deletingMessage.set(null);
     this.errorMsg.set(null);
     const hrs = Math.floor((msg.durationMinutes || 0) / 60);
     const mins = Math.round((msg.durationMinutes || 0) % 60);
@@ -673,6 +761,7 @@ export class MessagesTracker {
 
   openAddTimeModal(msg: MessageListeningRecord) {
     this.showForm.set(false);
+    this.deletingMessage.set(null);
     this.addTimeForm.reset({ hours: 0, minutes: 30 });
     this.addingTimeMessage.set(msg);
   }
@@ -760,9 +849,18 @@ export class MessagesTracker {
     }
   }
 
-  async deleteRecord(id: string) {
+  confirmDeleteRecord(msg: MessageListeningRecord) {
+    this.showForm.set(false);
+    this.addingTimeMessage.set(null);
+    this.deletingMessage.set(msg);
+  }
+
+  async executeDeleteRecord() {
+    const msg = this.deletingMessage();
+    if (!msg) return;
+    this.deletingMessage.set(null);
     try {
-      await this.firebaseService.deleteMessageRecord(id);
+      await this.firebaseService.deleteMessageRecord(msg.id);
       this.saved.emit('Message removed.');
     } catch {
       // ignore

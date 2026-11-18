@@ -29,10 +29,13 @@ interface AuthorityCardView {
   selector: 'app-seed-tracker',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, ReactiveFormsModule, MatIconModule],
+  host: {
+    '(window:keydown.escape)': 'closeAllModals()',
+  },
   template: `
     <div class="space-y-6">
       <!-- Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-stone-800/80">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 pb-4 border-b border-stone-800/80">
         <div>
           <span class="text-xs font-semibold uppercase tracking-wider text-amber-500">
             Seed Altar
@@ -45,26 +48,24 @@ interface AuthorityCardView {
           </p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 shrink-0">
+        <div class="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto shrink-0">
           <button
             type="button"
             (click)="openAuthorityForm()"
-            class="flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-100 border border-stone-700 transition-all"
+            class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-3.5 rounded-xl text-xs font-semibold bg-stone-800 hover:bg-stone-700 text-stone-100 border border-stone-700 transition-all"
           >
             <mat-icon style="font-size: 16px;">person_add</mat-icon>
             <span>Add Target</span>
           </button>
 
-          @if (firebaseService.authorities().length > 0) {
-            <button
-              type="button"
-              (click)="openSeedForm()"
-              class="flex items-center gap-1.5 py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-all shadow-md"
-            >
-              <mat-icon style="font-size: 18px;">volunteer_activism</mat-icon>
-              <span>Log Seed</span>
-            </button>
-          }
+          <button
+            type="button"
+            (click)="openSeedForm()"
+            class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 transition-all shadow-md"
+          >
+            <mat-icon style="font-size: 18px;">volunteer_activism</mat-icon>
+            <span>Log Seed</span>
+          </button>
         </div>
       </div>
 
@@ -259,11 +260,11 @@ interface AuthorityCardView {
                     }
                   </div>
 
-                  <div class="flex items-center gap-1">
+                  <div class="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
                       (click)="openSeedFormForAuthority(card.authority.id, card.authority.mode)"
-                      class="py-1 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 transition-colors"
+                      class="py-1.5 px-2.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1 transition-colors"
                     >
                       <mat-icon style="font-size: 14px;">add</mat-icon>
                       <span>Give</span>
@@ -273,14 +274,16 @@ interface AuthorityCardView {
                       (click)="editAuthority(card.authority)"
                       class="p-1.5 rounded-lg text-stone-400 hover:text-amber-400 hover:bg-stone-800"
                       title="Edit Target"
+                      aria-label="Edit Target"
                     >
                       <mat-icon style="font-size: 16px;">edit</mat-icon>
                     </button>
                     <button
                       type="button"
-                      (click)="deleteAuthority(card.authority.id)"
+                      (click)="confirmDeleteAuthority(card.authority)"
                       class="p-1.5 rounded-lg text-stone-400 hover:text-red-400 hover:bg-stone-800"
                       title="Remove Target and All Saved Seeds"
+                      aria-label="Remove Target"
                     >
                       <mat-icon style="font-size: 16px;">delete</mat-icon>
                     </button>
@@ -288,36 +291,36 @@ interface AuthorityCardView {
                 </div>
 
                 <!-- Seed Given vs Year-End Target Numbers -->
-                <div class="grid grid-cols-3 gap-3 p-3.5 rounded-xl bg-stone-950 border border-stone-800 text-xs">
-                  <div>
+                <div class="grid grid-cols-3 gap-2.5 sm:gap-3 p-3.5 rounded-xl bg-stone-950 border border-stone-800 text-xs">
+                  <div class="min-w-0">
                     <span class="text-stone-500 block">Given</span>
-                    <span class="text-sm sm:text-base font-mono font-bold text-emerald-400 tabular-nums block">
+                    <span class="text-xs sm:text-base font-mono font-bold text-emerald-400 tabular-nums block truncate">
                       {{ card.authority.currency }} {{ firebaseService.formatOneDecimal(card.givenAmount) }}
                     </span>
                     @if (card.isForeignCurrency) {
-                      <span class="text-[10px] font-mono text-stone-400 tabular-nums block">
+                      <span class="text-[10px] font-mono text-stone-400 tabular-nums block truncate">
                         ≈ GHS {{ firebaseService.formatOneDecimal(card.givenAmountGhs) }}
                       </span>
                     }
                   </div>
-                  <div>
+                  <div class="min-w-0">
                     <span class="text-stone-500 block">Target</span>
-                    <span class="text-sm sm:text-base font-mono font-bold text-stone-100 tabular-nums block">
+                    <span class="text-xs sm:text-base font-mono font-bold text-stone-100 tabular-nums block truncate">
                       {{ card.authority.currency }} {{ firebaseService.formatOneDecimal(card.authority.yearTargetAmount) }}
                     </span>
                     @if (card.isForeignCurrency) {
-                      <span class="text-[10px] font-mono text-stone-400 tabular-nums block">
+                      <span class="text-[10px] font-mono text-stone-400 tabular-nums block truncate">
                         ≈ GHS {{ firebaseService.formatOneDecimal(card.targetAmountGhs) }}
                       </span>
                     }
                   </div>
-                  <div>
+                  <div class="min-w-0">
                     <span class="text-stone-500 block">Left</span>
-                    <span class="text-sm sm:text-base font-mono font-bold text-amber-400 tabular-nums block">
+                    <span class="text-xs sm:text-base font-mono font-bold text-amber-400 tabular-nums block truncate">
                       {{ card.authority.currency }} {{ firebaseService.formatOneDecimal(card.remainingAmount) }}
                     </span>
                     @if (card.isForeignCurrency) {
-                      <span class="text-[10px] font-mono text-stone-400 tabular-nums block">
+                      <span class="text-[10px] font-mono text-stone-400 tabular-nums block truncate">
                         ≈ GHS {{ firebaseService.formatOneDecimal(card.remainingAmountGhs) }}
                       </span>
                     }
@@ -353,9 +356,9 @@ interface AuthorityCardView {
                     </div>
                     <div class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
                       @for (s of card.records; track s.id) {
-                        <div class="flex items-center justify-between p-2.5 rounded-xl bg-stone-950/70 border border-stone-800/80 text-xs">
-                          <div class="space-y-0.5">
-                            <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-stone-950/70 border border-stone-800/80 text-xs">
+                          <div class="space-y-0.5 min-w-0">
+                            <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
                               <span class="font-mono font-bold text-emerald-400 tabular-nums">
                                 +{{ card.authority.currency }} {{ firebaseService.formatOneDecimal(s.amount) }}
                               </span>
@@ -370,16 +373,17 @@ interface AuthorityCardView {
                               </span>
                             </div>
                             @if (s.notes) {
-                              <p class="text-[11px] text-stone-400">{{ s.notes }} · {{ s.authorName }}</p>
+                              <p class="text-[11px] text-stone-400 truncate">{{ s.notes }} · {{ s.authorName }}</p>
                             } @else {
                               <p class="text-[11px] text-stone-500">{{ s.authorName }}</p>
                             }
                           </div>
                           <button
                             type="button"
-                            (click)="deleteSeed(s.id)"
-                            class="p-1 text-stone-500 hover:text-red-400 rounded"
+                            (click)="confirmDeleteSeed(s)"
+                            class="p-1.5 text-stone-500 hover:text-red-400 rounded-lg hover:bg-stone-900 shrink-0"
                             title="Delete Seed"
+                            aria-label="Delete Seed"
                           >
                             <mat-icon style="font-size: 15px;">delete</mat-icon>
                           </button>
@@ -397,12 +401,19 @@ interface AuthorityCardView {
       <!-- POP-UP MODAL 1: Add / Edit Authority Figure & Year-End Seed Target -->
       @if (showAuthorityForm()) {
         <div
-          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          data-no-swipe="true"
+          class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in overflow-y-auto"
           role="dialog"
           aria-modal="true"
         >
+          <button
+            type="button"
+            aria-label="Close seed target form overlay"
+            (click)="showAuthorityForm.set(false)"
+            class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+          ></button>
           <div
-            class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-5"
+            class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[85dvh] overflow-y-auto shadow-2xl p-5 sm:p-6 space-y-5 my-auto"
           >
             <div class="flex items-center justify-between border-b border-stone-800 pb-3">
               <div>
@@ -533,18 +544,19 @@ interface AuthorityCardView {
                 </div>
               </div>
 
-              <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-800">
+              <div class="grid grid-cols-2 sm:flex items-center justify-end gap-2.5 pt-3 border-t border-stone-800">
                 <button
                   type="button"
                   (click)="showAuthorityForm.set(false)"
-                  class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+                  class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-medium text-stone-300 bg-stone-800/70 hover:bg-stone-800 hover:text-stone-100"
                 >
-                  Cancel
+                  <mat-icon style="font-size: 15px;">close</mat-icon>
+                  <span>Cancel</span>
                 </button>
                 <button
                   type="submit"
                   [disabled]="isSaving()"
-                  class="flex items-center gap-1.5 py-2 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 shadow-md"
+                  class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-5 rounded-xl text-xs font-semibold bg-amber-500 text-stone-950 hover:bg-amber-400 disabled:opacity-50 shadow-md"
                 >
                   <mat-icon style="font-size: 16px;">check</mat-icon>
                   <span>{{ editingAuthority() ? 'Update' : 'Save Target' }}</span>
@@ -558,12 +570,19 @@ interface AuthorityCardView {
       <!-- POP-UP MODAL 2: Record Seed Given -->
       @if (showSeedForm()) {
         <div
-          class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          data-no-swipe="true"
+          class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in overflow-y-auto"
           role="dialog"
           aria-modal="true"
         >
+          <button
+            type="button"
+            aria-label="Close seed offering form overlay"
+            (click)="showSeedForm.set(false)"
+            class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+          ></button>
           <div
-            class="modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl p-6 space-y-5"
+            class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-lg max-h-[85dvh] overflow-y-auto shadow-2xl p-5 sm:p-6 space-y-5 my-auto"
           >
             <div class="flex items-center justify-between border-b border-stone-800 pb-3">
               <div>
@@ -676,24 +695,131 @@ interface AuthorityCardView {
                 />
               </div>
 
-              <div class="flex items-center justify-end gap-2 pt-3 border-t border-stone-800">
+              <div class="grid grid-cols-2 sm:flex items-center justify-end gap-2.5 pt-3 border-t border-stone-800">
                 <button
                   type="button"
                   (click)="showSeedForm.set(false)"
-                  class="py-2 px-4 rounded-xl text-xs font-medium text-stone-400 hover:text-stone-100 hover:bg-stone-800"
+                  class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-medium text-stone-300 bg-stone-800/70 hover:bg-stone-800 hover:text-stone-100"
                 >
-                  Cancel
+                  <mat-icon style="font-size: 15px;">close</mat-icon>
+                  <span>Cancel</span>
                 </button>
                 <button
                   type="submit"
                   [disabled]="isSaving()"
-                  class="flex items-center gap-1.5 py-2 px-5 rounded-xl text-xs font-semibold bg-emerald-500 text-stone-950 hover:bg-emerald-400 disabled:opacity-50 shadow-md"
+                  class="w-full sm:w-auto flex items-center justify-center gap-1.5 py-2.5 sm:py-2 px-5 rounded-xl text-xs font-semibold bg-emerald-500 text-stone-950 hover:bg-emerald-400 disabled:opacity-50 shadow-md"
                 >
                   <mat-icon style="font-size: 16px;">volunteer_activism</mat-icon>
                   <span>Save Seed</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      }
+
+      <!-- POP-UP MODAL 3: Delete Seed Target Confirmation -->
+      @if (deletingAuthority(); as delAuth) {
+        <div
+          data-no-swipe="true"
+          class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            aria-label="Close delete seed target overlay"
+            (click)="deletingAuthority.set(null)"
+            class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+          ></button>
+          <div
+            class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-5 sm:p-6 space-y-4 shadow-2xl"
+          >
+            <div class="flex items-center justify-between">
+              <h3 class="text-base font-serif font-bold text-stone-100">Delete Seed Target</h3>
+              <button
+                type="button"
+                (click)="deletingAuthority.set(null)"
+                class="text-stone-400 hover:text-stone-100 p-1 rounded-lg hover:bg-stone-800"
+                aria-label="Close modal"
+              >
+                <mat-icon style="font-size: 18px;">close</mat-icon>
+              </button>
+            </div>
+            <p class="text-xs text-stone-300 leading-relaxed">
+              Delete <strong>{{ delAuth.authorityName }}</strong> and all saved seed records under this target?
+            </p>
+            <div class="grid grid-cols-2 sm:flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                (click)="deletingAuthority.set(null)"
+                class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-medium text-stone-300 bg-stone-800/70 hover:bg-stone-800 hover:text-stone-100"
+              >
+                <mat-icon style="font-size: 15px;">close</mat-icon>
+                <span>Cancel</span>
+              </button>
+              <button
+                type="button"
+                (click)="executeDeleteAuthority()"
+                class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white"
+              >
+                <mat-icon style="font-size: 15px;">delete</mat-icon>
+                <span>Delete All</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- POP-UP MODAL 4: Delete Seed Offering Confirmation -->
+      @if (deletingSeed(); as delSeed) {
+        <div
+          data-no-swipe="true"
+          class="fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm modal-backdrop-in"
+          role="dialog"
+          aria-modal="true"
+        >
+          <button
+            type="button"
+            aria-label="Close delete seed record overlay"
+            (click)="deletingSeed.set(null)"
+            class="fixed inset-0 w-full h-full cursor-default focus:outline-none"
+          ></button>
+          <div
+            class="relative z-10 modal-pop-in bg-stone-900 border border-stone-800 rounded-2xl w-full max-w-sm p-5 sm:p-6 space-y-4 shadow-2xl"
+          >
+            <div class="flex items-center justify-between">
+              <h3 class="text-base font-serif font-bold text-stone-100">Delete Seed Record</h3>
+              <button
+                type="button"
+                (click)="deletingSeed.set(null)"
+                class="text-stone-400 hover:text-stone-100 p-1 rounded-lg hover:bg-stone-800"
+                aria-label="Close modal"
+              >
+                <mat-icon style="font-size: 18px;">close</mat-icon>
+              </button>
+            </div>
+            <p class="text-xs text-stone-300 leading-relaxed">
+              Delete this seed entry ({{ firebaseService.formatOneDecimal(delSeed.amount) }} on {{ delSeed.date }})?
+            </p>
+            <div class="grid grid-cols-2 sm:flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                (click)="deletingSeed.set(null)"
+                class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-medium text-stone-300 bg-stone-800/70 hover:bg-stone-800 hover:text-stone-100"
+              >
+                <mat-icon style="font-size: 15px;">close</mat-icon>
+                <span>Cancel</span>
+              </button>
+              <button
+                type="button"
+                (click)="executeDeleteSeed()"
+                class="w-full sm:w-auto flex items-center justify-center gap-1 py-2.5 sm:py-2 px-4 rounded-xl text-xs font-semibold bg-red-600 hover:bg-red-500 text-white"
+              >
+                <mat-icon style="font-size: 15px;">delete</mat-icon>
+                <span>Delete</span>
+              </button>
+            </div>
           </div>
         </div>
       }
@@ -708,6 +834,9 @@ export class SeedTracker {
   readonly showSeedForm = signal(false);
   readonly isSaving = signal(false);
   readonly editingAuthority = signal<AuthorityFigureSeed | null>(null);
+  readonly deletingAuthority = signal<AuthorityFigureSeed | null>(null);
+  readonly deletingSeed = signal<SeedGivingRecord | null>(null);
+  readonly pendingSeedAfterTarget = signal(false);
 
   // Filter & Sort state
   readonly searchQuery = signal('');
@@ -815,8 +944,19 @@ export class SeedTracker {
     });
   });
 
+  closeAllModals() {
+    this.showAuthorityForm.set(false);
+    this.showSeedForm.set(false);
+    this.deletingAuthority.set(null);
+    this.deletingSeed.set(null);
+    this.editingAuthority.set(null);
+    this.pendingSeedAfterTarget.set(false);
+  }
+
   openAuthorityForm() {
     this.editingAuthority.set(null);
+    this.deletingAuthority.set(null);
+    this.deletingSeed.set(null);
     this.authorityForm.reset({
       authorityName: '',
       roleTitle: '',
@@ -831,6 +971,8 @@ export class SeedTracker {
 
   editAuthority(authItem: AuthorityFigureSeed) {
     this.editingAuthority.set(authItem);
+    this.deletingAuthority.set(null);
+    this.deletingSeed.set(null);
     this.authorityForm.reset({
       authorityName: authItem.authorityName,
       roleTitle: authItem.roleTitle || '',
@@ -845,11 +987,18 @@ export class SeedTracker {
 
   openSeedForm() {
     const first = this.firebaseService.authorities()[0];
-    if (!first) return;
+    if (!first) {
+      // If no target exists yet, open the New Seed Target pop-up first and then chain to Log Seed
+      this.pendingSeedAfterTarget.set(true);
+      this.openAuthorityForm();
+      return;
+    }
     this.openSeedFormForAuthority(first.id, first.mode);
   }
 
   openSeedFormForAuthority(authorityId: string, defaultMode: 'individual' | 'partner') {
+    this.deletingAuthority.set(null);
+    this.deletingSeed.set(null);
     this.seedForm.reset({
       authorityId,
       amount: 100,
@@ -892,6 +1041,14 @@ export class SeedTracker {
       }
       this.isSaving.set(false);
       this.showAuthorityForm.set(false);
+
+      if (this.pendingSeedAfterTarget()) {
+        this.pendingSeedAfterTarget.set(false);
+        const created = this.firebaseService.authorities()[0];
+        if (created) {
+          this.openSeedFormForAuthority(created.id, created.mode);
+        }
+      }
     } catch {
       this.isSaving.set(false);
     }
@@ -920,13 +1077,33 @@ export class SeedTracker {
     }
   }
 
-  async deleteAuthority(id: string) {
-    await this.firebaseService.deleteAuthorityFigure(id);
+  confirmDeleteAuthority(authItem: AuthorityFigureSeed) {
+    this.showAuthorityForm.set(false);
+    this.showSeedForm.set(false);
+    this.deletingSeed.set(null);
+    this.deletingAuthority.set(authItem);
+  }
+
+  async executeDeleteAuthority() {
+    const authItem = this.deletingAuthority();
+    if (!authItem) return;
+    this.deletingAuthority.set(null);
+    await this.firebaseService.deleteAuthorityFigure(authItem.id);
     this.saved.emit('Target and saved seeds removed.');
   }
 
-  async deleteSeed(id: string) {
-    await this.firebaseService.deleteSeedRecord(id);
+  confirmDeleteSeed(seedItem: SeedGivingRecord) {
+    this.showAuthorityForm.set(false);
+    this.showSeedForm.set(false);
+    this.deletingAuthority.set(null);
+    this.deletingSeed.set(seedItem);
+  }
+
+  async executeDeleteSeed() {
+    const seedItem = this.deletingSeed();
+    if (!seedItem) return;
+    this.deletingSeed.set(null);
+    await this.firebaseService.deleteSeedRecord(seedItem.id);
     this.saved.emit('Seed removed.');
   }
 }

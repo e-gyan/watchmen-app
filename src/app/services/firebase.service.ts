@@ -84,6 +84,9 @@ const ACTIVE_PARTNERSHIP_KEY = 'watchman_active_partnership_id_v1';
 const LOCAL_STORE_KEY = 'watchman_local_cloud_backup_v1';
 const CUSTOM_CATEGORIES_KEY = 'watchman_custom_categories_v1';
 const DAILY_ALERT_SETTINGS_KEY = 'watchman_daily_alert_settings_v1';
+const SYNCED_PROFILE_FINGERPRINT_KEY = 'watchman_synced_profile_fp_v1';
+const FIRESTORE_WRITE_PAUSE_KEY = 'watchman_firestore_write_pause_until_v1';
+const PENDING_CLOUD_WRITES_KEY = 'watchman_pending_cloud_writes_v1';
 
 const DEFAULT_MENU_ITEMS: NavigationMenuItem[] = [
   { id: 'dashboard', label: 'Dashboard', icon: 'dashboard', showInBottomBar: true, showInSidebar: true, slideOrder: 0 },
@@ -253,6 +256,8 @@ export class FirebaseService {
   readonly fxSource = signal<'live' | 'fallback'>('fallback');
   readonly fxUpdatedAt = signal<string>('');
 
+  readonly firestoreQuotaExceeded = signal<boolean>(false);
+
   private unsubPartnerships: (() => void) | null = null;
   private unsubSessions: (() => void) | null = null;
   private unsubTestimonies: (() => void) | null = null;
@@ -260,11 +265,15 @@ export class FirebaseService {
   private unsubMessages: (() => void) | null = null;
   private unsubAuthorities: (() => void) | null = null;
   private unsubSeeds: (() => void) | null = null;
+  private subscribedPartnershipId: string | null = null;
+  private attemptedMemberUidSyncIds = new Set<string>();
+  private quotaWarningLogged = false;
   private fallbackPollTimer: ReturnType<typeof setInterval> | null = null;
   private fxStream: EventSource | null = null;
   private cloudStream: EventSource | null = null;
 
   constructor() {
+    this.firestoreQuotaExceeded.set(this.isFirestoreWritePaused());
     // 0ms instant hydration from local cache before any network call
     this.hydrateFromLocalCacheSync();
     this.fetchBackendMenuConfig();
@@ -1042,20 +1051,218 @@ export class FirebaseService {
     }
   }
 
-  private async syncUserProfile(user: User) {
-    if (this.isFallbackMode() || !auth.currentUser) return;
-    const userPath = `users/${user.uid}`;
+  // --- Firestore Quota Protection & Pending-Write Sync Helpers ---
+
+  private isQuotaError(err: unknown): boolean {
+    if (!err) return false;
+    const code = (err as { code?: string })?.code || '';
+    const msg = (err instanceof Error ? err.message : String(err)).toLowerCase();
+    return (
+      code === 'resource-exhausted' ||
+      msg.includes('resource-exhausted') ||
+      msg.includes('quota limit exceeded') ||
+      msg.includes('quota exceeded')
+    );
+  }
+
+  private isFirestoreWritePaused(): boolean {
+    if (typeof window === 'undefined') return false;
     try {
-      const profileData: AppUser = {
-        uid: user.uid,
-        email: user.email || '',
-        displayName: user.displayName || user.email?.split('@')[0] || 'Intercessor',
-        photoURL: user.photoURL || '',
-        createdAt: new Date().toISOString(),
-      };
-      await setDoc(doc(db, 'users', user.uid), removeUndefinedFields(profileData), { merge: true });
+      const raw = localStorage.getItem(FIRESTORE_WRITE_PAUSE_KEY);
+      if (!raw) return false;
+      const pauseUntil = Number(raw);
+      if (!Number.isFinite(pauseUntil) || Date.now() >= pauseUntil) {
+        localStorage.removeItem(FIRESTORE_WRITE_PAUSE_KEY);
+        this.firestoreQuotaExceeded.set(false);
+        return false;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  private pauseFirestoreWrites(): void {
+    this.firestoreQuotaExceeded.set(true);
+    if (typeof window === 'undefined') return;
+    try {
+      const now = new Date();
+      // Pause until next UTC midnight + 5 mins (when Firestore daily free-tier write quota resets)
+      const nextUtcMidnight = Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + 1,
+        0,
+        5,
+        0
+      );
+      localStorage.setItem(FIRESTORE_WRITE_PAUSE_KEY, String(nextUtcMidnight));
+    } catch {
+      // ignore storage errors
+    }
+    if (!this.quotaWarningLogged) {
+      this.quotaWarningLogged = true;
+      console.warn(
+        'Firestore daily write quota exceeded. Continuing seamlessly with local and cloud sync until daily reset.'
+      );
+    }
+  }
+
+  private getPendingWritesMap(): Record<string, 'upsert' | 'delete'> {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = localStorage.getItem(PENDING_CLOUD_WRITES_KEY);
+      return raw ? (JSON.parse(raw) as Record<string, 'upsert' | 'delete'>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private setPendingWrite(key: string | undefined, action: 'upsert' | 'delete'): void {
+    if (!key || typeof window === 'undefined') return;
+    try {
+      const map = this.getPendingWritesMap();
+      map[key] = action;
+      localStorage.setItem(PENDING_CLOUD_WRITES_KEY, JSON.stringify(map));
+    } catch {
+      // ignore
+    }
+  }
+
+  private clearPendingWrite(key: string | undefined): void {
+    if (!key || typeof window === 'undefined') return;
+    try {
+      const map = this.getPendingWritesMap();
+      if (key in map) {
+        delete map[key];
+        localStorage.setItem(PENDING_CLOUD_WRITES_KEY, JSON.stringify(map));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private mergeFirestoreListWithPending<T extends { id: string }>(
+    type: keyof Omit<LocalCloudBackup, 'partnerships'>,
+    partnershipId: string,
+    firestoreList: T[]
+  ): T[] {
+    const pendingMap = this.getPendingWritesMap();
+    const prefix = `${type}:${partnershipId}:`;
+    const backup = this.getLocalBackup();
+    const localItems = (backup[type][partnershipId] || []) as unknown as T[];
+
+    const merged = new Map<string, T>();
+    for (const item of firestoreList) {
+      const action = pendingMap[prefix + item.id];
+      if (action === 'delete') continue;
+      merged.set(item.id, item);
+    }
+
+    for (const localItem of localItems) {
+      const action = pendingMap[prefix + localItem.id];
+      if (action === 'upsert') {
+        merged.set(localItem.id, localItem);
+      }
+    }
+
+    return Array.from(merged.values());
+  }
+
+  private mergePartnershipsWithPending(firestoreList: Partnership[]): Partnership[] {
+    const pendingMap = this.getPendingWritesMap();
+    const prefix = 'partnership:root:';
+    const backup = this.getLocalBackup();
+    const merged = new Map<string, Partnership>();
+
+    for (const p of firestoreList) {
+      if (pendingMap[prefix + p.id] === 'delete') continue;
+      merged.set(p.id, p);
+    }
+
+    for (const localP of backup.partnerships) {
+      if (pendingMap[prefix + localP.id] === 'upsert') {
+        merged.set(localP.id, localP);
+      }
+    }
+
+    return Array.from(merged.values());
+  }
+
+  private async executeFirestoreWrite(
+    operationType: OperationType,
+    path: string,
+    op: () => Promise<unknown>,
+    pendingKey?: string,
+    pendingAction: 'upsert' | 'delete' = 'upsert'
+  ): Promise<void> {
+    if (this.isFallbackMode() || !auth.currentUser) return;
+
+    if (this.isFirestoreWritePaused()) {
+      this.setPendingWrite(pendingKey, pendingAction);
+      return;
+    }
+
+    try {
+      await op();
+      this.clearPendingWrite(pendingKey);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, userPath);
+      if (this.isQuotaError(err)) {
+        this.pauseFirestoreWrites();
+        this.setPendingWrite(pendingKey, pendingAction);
+        return;
+      }
+      try {
+        handleFirestoreError(err, operationType, path);
+      } catch {
+        // Structured error already logged by handleFirestoreError; avoid unhandled rejection crash
+      }
+    }
+  }
+
+  private async syncUserProfile(user: User) {
+    if (this.isFallbackMode() || !auth.currentUser || this.isFirestoreWritePaused()) return;
+    const displayName = user.displayName || user.email?.split('@')[0] || 'Intercessor';
+    const fingerprint = `${user.uid}|${user.email || ''}|${displayName}|${user.photoURL || ''}`;
+
+    if (typeof window !== 'undefined') {
+      try {
+        if (localStorage.getItem(SYNCED_PROFILE_FINGERPRINT_KEY) === fingerprint) {
+          return;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const userPath = `users/${user.uid}`;
+    const profileData: AppUser = {
+      uid: user.uid,
+      email: user.email || '',
+      displayName,
+      photoURL: user.photoURL || '',
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      await setDoc(doc(db, 'users', user.uid), removeUndefinedFields(profileData), { merge: true });
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(SYNCED_PROFILE_FINGERPRINT_KEY, fingerprint);
+        } catch {
+          // ignore
+        }
+      }
+    } catch (err) {
+      if (this.isQuotaError(err)) {
+        this.pauseFirestoreWrites();
+        return;
+      }
+      try {
+        handleFirestoreError(err, OperationType.WRITE, userPath);
+      } catch {
+        // Structured error already logged
+      }
     }
   }
 
@@ -1078,36 +1285,47 @@ export class FirebaseService {
     this.unsubPartnerships = onSnapshot(
       q1,
       (snapshot) => {
-        const list: Partnership[] = [];
+        const rawList: Partnership[] = [];
         snapshot.forEach((docSnap) => {
-          list.push({ ...docSnap.data(), id: docSnap.id } as Partnership);
+          rawList.push({ ...docSnap.data(), id: docSnap.id } as Partnership);
         });
 
-        // Also ensure memberUids includes user.uid if not yet updated
-        list.forEach((p) => {
-          if (!p.memberUids.includes(user.uid)) {
-            updateDoc(doc(db, 'partnerships', p.id), {
-              memberUids: [...p.memberUids, user.uid],
-            }).catch(() => {
-              // ignore sync error
-            });
-          }
-        });
+        const list = this.mergePartnershipsWithPending(rawList);
+
+        // Ensure memberUids includes user.uid at most once per partnership, skipping when quota-paused
+        if (!this.isFirestoreWritePaused()) {
+          list.forEach((p) => {
+            if (!p.memberUids.includes(user.uid) && !this.attemptedMemberUidSyncIds.has(p.id)) {
+              this.attemptedMemberUidSyncIds.add(p.id);
+              void this.executeFirestoreWrite(
+                OperationType.UPDATE,
+                `partnerships/${p.id}`,
+                () =>
+                  updateDoc(doc(db, 'partnerships', p.id), {
+                    memberUids: [...p.memberUids, user.uid],
+                  }),
+                `partnership:root:${p.id}`,
+                'upsert'
+              );
+            }
+          });
+        }
 
         this.partnerships.set(list);
         const backup = this.getLocalBackup();
         backup.partnerships = list;
         this.saveLocalBackup(backup);
 
-        // Auto-select active partnership
+        // Auto-select active partnership without tearing down existing subcollection listeners unnecessarily
         if (list.length > 0) {
           const current = this.activePartnershipId();
           if (!current || !list.some((p) => p.id === current)) {
             this.selectPartnership(list[0].id);
-          } else {
+          } else if (this.subscribedPartnershipId !== current) {
             this.subscribeToPartnershipData(current);
           }
         } else {
+          this.subscribedPartnershipId = null;
           this.activePartnershipId.set(null);
           this.sessions.set([]);
           this.testimonies.set([]);
@@ -1118,7 +1336,15 @@ export class FirebaseService {
         }
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, partnershipsPath);
+        if (this.isQuotaError(error)) {
+          this.pauseFirestoreWrites();
+          return;
+        }
+        try {
+          handleFirestoreError(error, OperationType.GET, partnershipsPath);
+        } catch {
+          // Structured error logged
+        }
       }
     );
   }
@@ -1142,6 +1368,8 @@ export class FirebaseService {
 
   private subscribeToPartnershipData(partnershipId: string) {
     if (this.isFallbackMode() || !auth.currentUser) return;
+    if (this.subscribedPartnershipId === partnershipId) return;
+    this.subscribedPartnershipId = partnershipId;
 
     // Unsubscribe previous subcollections
     if (this.unsubSessions) this.unsubSessions();
@@ -1156,10 +1384,11 @@ export class FirebaseService {
     this.unsubSessions = onSnapshot(
       collection(db, sessionsPath),
       (snapshot) => {
-        const list: PrayerSession[] = [];
+        const rawList: PrayerSession[] = [];
         snapshot.forEach((d) => {
-          list.push({ ...d.data(), id: d.id } as PrayerSession);
+          rawList.push({ ...d.data(), id: d.id } as PrayerSession);
         });
+        const list = this.mergeFirestoreListWithPending('sessions', partnershipId, rawList);
         list.sort(
           (a, b) =>
             b.date.localeCompare(a.date) ||
@@ -1169,7 +1398,15 @@ export class FirebaseService {
         this.mirrorCollectionToLocalBackup('sessions', partnershipId, list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, sessionsPath);
+        if (this.isQuotaError(error)) {
+          this.pauseFirestoreWrites();
+          return;
+        }
+        try {
+          handleFirestoreError(error, OperationType.GET, sessionsPath);
+        } catch {
+          // Structured error logged
+        }
       }
     );
 
@@ -1178,10 +1415,11 @@ export class FirebaseService {
     this.unsubTestimonies = onSnapshot(
       collection(db, testimoniesPath),
       (snapshot) => {
-        const list: Testimony[] = [];
+        const rawList: Testimony[] = [];
         snapshot.forEach((d) => {
-          list.push({ ...d.data(), id: d.id } as Testimony);
+          rawList.push({ ...d.data(), id: d.id } as Testimony);
         });
+        const list = this.mergeFirestoreListWithPending('testimonies', partnershipId, rawList);
         list.sort(
           (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
         );
@@ -1189,7 +1427,15 @@ export class FirebaseService {
         this.mirrorCollectionToLocalBackup('testimonies', partnershipId, list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, testimoniesPath);
+        if (this.isQuotaError(error)) {
+          this.pauseFirestoreWrites();
+          return;
+        }
+        try {
+          handleFirestoreError(error, OperationType.GET, testimoniesPath);
+        } catch {
+          // Structured error logged
+        }
       }
     );
 
@@ -1198,16 +1444,25 @@ export class FirebaseService {
     this.unsubRequests = onSnapshot(
       collection(db, requestsPath),
       (snapshot) => {
-        const list: PrayerRequest[] = [];
+        const rawList: PrayerRequest[] = [];
         snapshot.forEach((d) => {
-          list.push({ ...d.data(), id: d.id } as PrayerRequest);
+          rawList.push({ ...d.data(), id: d.id } as PrayerRequest);
         });
+        const list = this.mergeFirestoreListWithPending('requests', partnershipId, rawList);
         list.sort((a, b) => b.dateAdded.localeCompare(a.dateAdded) || b.id.localeCompare(a.id));
         this.requests.set(list);
         this.mirrorCollectionToLocalBackup('requests', partnershipId, list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, requestsPath);
+        if (this.isQuotaError(error)) {
+          this.pauseFirestoreWrites();
+          return;
+        }
+        try {
+          handleFirestoreError(error, OperationType.GET, requestsPath);
+        } catch {
+          // Structured error logged
+        }
       }
     );
 
@@ -1216,10 +1471,11 @@ export class FirebaseService {
     this.unsubMessages = onSnapshot(
       collection(db, messagesPath),
       (snapshot) => {
-        const list: MessageListeningRecord[] = [];
+        const rawList: MessageListeningRecord[] = [];
         snapshot.forEach((d) => {
-          list.push({ ...d.data(), id: d.id } as MessageListeningRecord);
+          rawList.push({ ...d.data(), id: d.id } as MessageListeningRecord);
         });
+        const list = this.mergeFirestoreListWithPending('messages', partnershipId, rawList);
         list.sort(
           (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
         );
@@ -1227,7 +1483,15 @@ export class FirebaseService {
         this.mirrorCollectionToLocalBackup('messages', partnershipId, list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, messagesPath);
+        if (this.isQuotaError(error)) {
+          this.pauseFirestoreWrites();
+          return;
+        }
+        try {
+          handleFirestoreError(error, OperationType.GET, messagesPath);
+        } catch {
+          // Structured error logged
+        }
       }
     );
 
@@ -1236,16 +1500,25 @@ export class FirebaseService {
     this.unsubAuthorities = onSnapshot(
       collection(db, authoritiesPath),
       (snapshot) => {
-        const list: AuthorityFigureSeed[] = [];
+        const rawList: AuthorityFigureSeed[] = [];
         snapshot.forEach((d) => {
-          list.push({ ...d.data(), id: d.id } as AuthorityFigureSeed);
+          rawList.push({ ...d.data(), id: d.id } as AuthorityFigureSeed);
         });
+        const list = this.mergeFirestoreListWithPending('authorities', partnershipId, rawList);
         list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         this.authorities.set(list);
         this.mirrorCollectionToLocalBackup('authorities', partnershipId, list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, authoritiesPath);
+        if (this.isQuotaError(error)) {
+          this.pauseFirestoreWrites();
+          return;
+        }
+        try {
+          handleFirestoreError(error, OperationType.GET, authoritiesPath);
+        } catch {
+          // Structured error logged
+        }
       }
     );
 
@@ -1254,10 +1527,11 @@ export class FirebaseService {
     this.unsubSeeds = onSnapshot(
       collection(db, seedsPath),
       (snapshot) => {
-        const list: SeedGivingRecord[] = [];
+        const rawList: SeedGivingRecord[] = [];
         snapshot.forEach((d) => {
-          list.push({ ...d.data(), id: d.id } as SeedGivingRecord);
+          rawList.push({ ...d.data(), id: d.id } as SeedGivingRecord);
         });
+        const list = this.mergeFirestoreListWithPending('seeds', partnershipId, rawList);
         list.sort(
           (a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || '')
         );
@@ -1265,7 +1539,15 @@ export class FirebaseService {
         this.mirrorCollectionToLocalBackup('seeds', partnershipId, list);
       },
       (error) => {
-        handleFirestoreError(error, OperationType.GET, seedsPath);
+        if (this.isQuotaError(error)) {
+          this.pauseFirestoreWrites();
+          return;
+        }
+        try {
+          handleFirestoreError(error, OperationType.GET, seedsPath);
+        } catch {
+          // Structured error logged
+        }
       }
     );
   }
@@ -1285,6 +1567,7 @@ export class FirebaseService {
     this.unsubMessages = null;
     this.unsubAuthorities = null;
     this.unsubSeeds = null;
+    this.subscribedPartnershipId = null;
     if (clearSignals) {
       this.partnerships.set([]);
       this.activePartnershipId.set(null);
@@ -1351,11 +1634,13 @@ export class FirebaseService {
     this.pushToFallbackCloud('partnership', 'upsert', sanitized as unknown as Record<string, unknown>);
     this.selectPartnership(pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void setDoc(doc(db, 'partnerships', pId), sanitized).catch((err) =>
-        handleFirestoreError(err, OperationType.WRITE, pPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.WRITE,
+      pPath,
+      () => setDoc(doc(db, 'partnerships', pId), sanitized),
+      `partnership:root:${pId}`,
+      'upsert'
+    );
 
     return pId;
   }
@@ -1382,13 +1667,18 @@ export class FirebaseService {
       { ...p, circleType: 'partner', memberEmails: updatedEmails } as unknown as Record<string, unknown>
     );
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      const pPath = `partnerships/${partnershipId}`;
-      void updateDoc(doc(db, 'partnerships', partnershipId), {
-        circleType: 'partner',
-        memberEmails: updatedEmails,
-      }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, pPath));
-    }
+    const pPath = `partnerships/${partnershipId}`;
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      pPath,
+      () =>
+        updateDoc(doc(db, 'partnerships', partnershipId), {
+          circleType: 'partner',
+          memberEmails: updatedEmails,
+        }),
+      `partnership:root:${partnershipId}`,
+      'upsert'
+    );
   }
 
   async updatePartnershipTargets(
@@ -1416,17 +1706,22 @@ export class FirebaseService {
       } as unknown as Record<string, unknown>);
     }
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      const pPath = `partnerships/${partnershipId}`;
-      void updateDoc(doc(db, 'partnerships', partnershipId), {
-        dailyTargetMinutes: targets.dailyMinutes,
-        weeklyTargetMinutes: targets.weeklyMinutes,
-        periodTitle: targets.periodTitle,
-        periodTargetMinutes: targets.periodTargetMinutes,
-        periodStartDate: targets.periodStartDate,
-        periodEndDate: targets.periodEndDate,
-      }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, pPath));
-    }
+    const pPath = `partnerships/${partnershipId}`;
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      pPath,
+      () =>
+        updateDoc(doc(db, 'partnerships', partnershipId), {
+          dailyTargetMinutes: targets.dailyMinutes,
+          weeklyTargetMinutes: targets.weeklyMinutes,
+          periodTitle: targets.periodTitle,
+          periodTargetMinutes: targets.periodTargetMinutes,
+          periodStartDate: targets.periodStartDate,
+          periodEndDate: targets.periodEndDate,
+        }),
+      `partnership:root:${partnershipId}`,
+      'upsert'
+    );
   }
 
   async addCustomCategory(
@@ -1576,11 +1871,13 @@ export class FirebaseService {
     // 0ms optimistic update
     this.pushToFallbackCloud('sessions', 'upsert', sanitized, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void setDoc(doc(db, 'partnerships', pId, 'sessions', sId), sanitized).catch((err) =>
-        handleFirestoreError(err, OperationType.WRITE, sPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.WRITE,
+      sPath,
+      () => setDoc(doc(db, 'partnerships', pId, 'sessions', sId), sanitized),
+      `sessions:${pId}:${sId}`,
+      'upsert'
+    );
 
     return sId;
   }
@@ -1617,11 +1914,13 @@ export class FirebaseService {
       pId
     );
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void updateDoc(doc(db, 'partnerships', pId, 'sessions', session.id), removeUndefinedFields(updatedData)).catch(
-        (err) => handleFirestoreError(err, OperationType.UPDATE, sPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      sPath,
+      () => updateDoc(doc(db, 'partnerships', pId, 'sessions', session.id), removeUndefinedFields(updatedData)),
+      `sessions:${pId}:${session.id}`,
+      'upsert'
+    );
   }
 
   async deleteSession(sessionId: string): Promise<void> {
@@ -1631,12 +1930,14 @@ export class FirebaseService {
     // 0ms optimistic delete
     this.pushToFallbackCloud('sessions', 'delete', { id: sessionId }, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      const sPath = `partnerships/${pId}/sessions/${sessionId}`;
-      void deleteDoc(doc(db, 'partnerships', pId, 'sessions', sessionId)).catch((err) =>
-        handleFirestoreError(err, OperationType.DELETE, sPath)
-      );
-    }
+    const sPath = `partnerships/${pId}/sessions/${sessionId}`;
+    void this.executeFirestoreWrite(
+      OperationType.DELETE,
+      sPath,
+      () => deleteDoc(doc(db, 'partnerships', pId, 'sessions', sessionId)),
+      `sessions:${pId}:${sessionId}`,
+      'delete'
+    );
   }
 
   // --- Testimony Operations (0ms Optimistic) ---
@@ -1685,11 +1986,13 @@ export class FirebaseService {
       void this.linkTestimonyToSession(testimonyData.linkedSessionId, tId, testimonyData.title);
     }
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void setDoc(doc(db, 'partnerships', pId, 'testimonies', tId), sanitized).catch((err) =>
-        handleFirestoreError(err, OperationType.WRITE, tPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.WRITE,
+      tPath,
+      () => setDoc(doc(db, 'partnerships', pId, 'testimonies', tId), sanitized),
+      `testimonies:${pId}:${tId}`,
+      'upsert'
+    );
 
     return tId;
   }
@@ -1725,11 +2028,13 @@ export class FirebaseService {
       void this.linkTestimonyToSession(testimony.linkedSessionId, testimony.id, testimony.title);
     }
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimony.id), removeUndefinedFields(updatedData)).catch(
-        (err) => handleFirestoreError(err, OperationType.UPDATE, tPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      tPath,
+      () => updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimony.id), removeUndefinedFields(updatedData)),
+      `testimonies:${pId}:${testimony.id}`,
+      'upsert'
+    );
   }
 
   async linkTestimonyToSession(
@@ -1759,15 +2064,27 @@ export class FirebaseService {
       );
     }
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void updateDoc(doc(db, 'partnerships', pId, 'sessions', sessionId), {
-        linkedTestimonyId: testimonyId,
-        linkedTestimonyTitle: testimonyTitle,
-      }).catch((err) => console.warn('Session testimony link warning:', err));
-      void updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
-        linkedSessionId: sessionId,
-      }).catch((err) => console.warn('Testimony session link warning:', err));
-    }
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      `partnerships/${pId}/sessions/${sessionId}`,
+      () =>
+        updateDoc(doc(db, 'partnerships', pId, 'sessions', sessionId), {
+          linkedTestimonyId: testimonyId,
+          linkedTestimonyTitle: testimonyTitle,
+        }),
+      `sessions:${pId}:${sessionId}`,
+      'upsert'
+    );
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      `partnerships/${pId}/testimonies/${testimonyId}`,
+      () =>
+        updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
+          linkedSessionId: sessionId,
+        }),
+      `testimonies:${pId}:${testimonyId}`,
+      'upsert'
+    );
   }
 
   async incrementAmen(testimonyId: string): Promise<void> {
@@ -1789,13 +2106,18 @@ export class FirebaseService {
       pId
     );
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
-      void updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
-        amensCount: (t.amensCount || 0) + 1,
-        amenUids: [...uids, user.uid],
-      }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, tPath));
-    }
+    const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      tPath,
+      () =>
+        updateDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId), {
+          amensCount: (t.amensCount || 0) + 1,
+          amenUids: [...uids, user.uid],
+        }),
+      `testimonies:${pId}:${testimonyId}`,
+      'upsert'
+    );
   }
 
   async deleteTestimony(testimonyId: string): Promise<void> {
@@ -1805,12 +2127,14 @@ export class FirebaseService {
     // 0ms optimistic delete
     this.pushToFallbackCloud('testimonies', 'delete', { id: testimonyId }, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
-      void deleteDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId)).catch((err) =>
-        handleFirestoreError(err, OperationType.DELETE, tPath)
-      );
-    }
+    const tPath = `partnerships/${pId}/testimonies/${testimonyId}`;
+    void this.executeFirestoreWrite(
+      OperationType.DELETE,
+      tPath,
+      () => deleteDoc(doc(db, 'partnerships', pId, 'testimonies', testimonyId)),
+      `testimonies:${pId}:${testimonyId}`,
+      'delete'
+    );
   }
 
   // --- Request Operations (0ms Optimistic) ---
@@ -1852,11 +2176,13 @@ export class FirebaseService {
     // 0ms optimistic update
     this.pushToFallbackCloud('requests', 'upsert', sanitized, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void setDoc(doc(db, 'partnerships', pId, 'requests', rId), sanitized).catch((err) =>
-        handleFirestoreError(err, OperationType.WRITE, rPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.WRITE,
+      rPath,
+      () => setDoc(doc(db, 'partnerships', pId, 'requests', rId), sanitized),
+      `requests:${pId}:${rId}`,
+      'upsert'
+    );
   }
 
   async updateRequest(request: PrayerRequest): Promise<void> {
@@ -1886,11 +2212,13 @@ export class FirebaseService {
       pId
     );
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void updateDoc(doc(db, 'partnerships', pId, 'requests', request.id), removeUndefinedFields(updatedData)).catch(
-        (err) => handleFirestoreError(err, OperationType.UPDATE, rPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      rPath,
+      () => updateDoc(doc(db, 'partnerships', pId, 'requests', request.id), removeUndefinedFields(updatedData)),
+      `requests:${pId}:${request.id}`,
+      'upsert'
+    );
   }
 
   setActiveFilterMember(member: string) {
@@ -1913,12 +2241,17 @@ export class FirebaseService {
       );
     }
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      const rPath = `partnerships/${pId}/requests/${requestId}`;
-      void updateDoc(doc(db, 'partnerships', pId, 'requests', requestId), {
-        status: nextStatus,
-      }).catch((err) => handleFirestoreError(err, OperationType.UPDATE, rPath));
-    }
+    const rPath = `partnerships/${pId}/requests/${requestId}`;
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      rPath,
+      () =>
+        updateDoc(doc(db, 'partnerships', pId, 'requests', requestId), {
+          status: nextStatus,
+        }),
+      `requests:${pId}:${requestId}`,
+      'upsert'
+    );
   }
 
   async deleteRequest(requestId: string): Promise<void> {
@@ -1928,12 +2261,14 @@ export class FirebaseService {
     // 0ms optimistic delete
     this.pushToFallbackCloud('requests', 'delete', { id: requestId }, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      const rPath = `partnerships/${pId}/requests/${requestId}`;
-      void deleteDoc(doc(db, 'partnerships', pId, 'requests', requestId)).catch((err) =>
-        handleFirestoreError(err, OperationType.DELETE, rPath)
-      );
-    }
+    const rPath = `partnerships/${pId}/requests/${requestId}`;
+    void this.executeFirestoreWrite(
+      OperationType.DELETE,
+      rPath,
+      () => deleteDoc(doc(db, 'partnerships', pId, 'requests', requestId)),
+      `requests:${pId}:${requestId}`,
+      'delete'
+    );
   }
 
   // --- Message Listening Operations (0ms Optimistic) ---
@@ -1969,11 +2304,13 @@ export class FirebaseService {
     // 0ms optimistic update
     this.pushToFallbackCloud('messages', 'upsert', sanitized, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void setDoc(doc(db, 'partnerships', pId, 'messages', mId), sanitized).catch((err) =>
-        handleFirestoreError(err, OperationType.WRITE, mPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.WRITE,
+      mPath,
+      () => setDoc(doc(db, 'partnerships', pId, 'messages', mId), sanitized),
+      `messages:${pId}:${mId}`,
+      'upsert'
+    );
 
     return mId;
   }
@@ -2003,11 +2340,13 @@ export class FirebaseService {
       pId
     );
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData)).catch(
-        (err) => handleFirestoreError(err, OperationType.UPDATE, mPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      mPath,
+      () => updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData)),
+      `messages:${pId}:${record.id}`,
+      'upsert'
+    );
   }
 
   /**
@@ -2038,11 +2377,13 @@ export class FirebaseService {
       pId
     );
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData)).catch(
-        (err) => handleFirestoreError(err, OperationType.UPDATE, mPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      mPath,
+      () => updateDoc(doc(db, 'partnerships', pId, 'messages', record.id), removeUndefinedFields(updatedData)),
+      `messages:${pId}:${record.id}`,
+      'upsert'
+    );
   }
 
   async deleteMessageRecord(messageId: string): Promise<void> {
@@ -2052,12 +2393,14 @@ export class FirebaseService {
     // 0ms optimistic delete
     this.pushToFallbackCloud('messages', 'delete', { id: messageId }, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      const mPath = `partnerships/${pId}/messages/${messageId}`;
-      void deleteDoc(doc(db, 'partnerships', pId, 'messages', messageId)).catch((err) =>
-        handleFirestoreError(err, OperationType.DELETE, mPath)
-      );
-    }
+    const mPath = `partnerships/${pId}/messages/${messageId}`;
+    void this.executeFirestoreWrite(
+      OperationType.DELETE,
+      mPath,
+      () => deleteDoc(doc(db, 'partnerships', pId, 'messages', messageId)),
+      `messages:${pId}:${messageId}`,
+      'delete'
+    );
   }
 
   // --- Authority Figure & Seed Giving Operations (0ms Optimistic) ---
@@ -2090,11 +2433,13 @@ export class FirebaseService {
     // 0ms optimistic update
     this.pushToFallbackCloud('authorities', 'upsert', sanitized, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void setDoc(doc(db, 'partnerships', pId, 'authorities', aId), sanitized).catch((err) =>
-        handleFirestoreError(err, OperationType.WRITE, aPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.WRITE,
+      aPath,
+      () => setDoc(doc(db, 'partnerships', pId, 'authorities', aId), sanitized),
+      `authorities:${pId}:${aId}`,
+      'upsert'
+    );
 
     return aId;
   }
@@ -2121,11 +2466,13 @@ export class FirebaseService {
       pId
     );
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void updateDoc(doc(db, 'partnerships', pId, 'authorities', authority.id), removeUndefinedFields(updatedData)).catch(
-        (err) => handleFirestoreError(err, OperationType.UPDATE, aPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.UPDATE,
+      aPath,
+      () => updateDoc(doc(db, 'partnerships', pId, 'authorities', authority.id), removeUndefinedFields(updatedData)),
+      `authorities:${pId}:${authority.id}`,
+      'upsert'
+    );
   }
 
   async deleteAuthorityFigure(authorityId: string): Promise<void> {
@@ -2142,6 +2489,13 @@ export class FirebaseService {
 
     if (!this.isFallbackMode() && auth.currentUser) {
       const aPath = `partnerships/${pId}/authorities/${authorityId}`;
+      if (this.isFirestoreWritePaused()) {
+        this.setPendingWrite(`authorities:${pId}:${authorityId}`, 'delete');
+        for (const seed of matchingSeeds) {
+          this.setPendingWrite(`seeds:${pId}:${seed.id}`, 'delete');
+        }
+        return;
+      }
       void (async () => {
         try {
           const seedIdsToDelete = new Set<string>(matchingSeeds.map((s) => s.id));
@@ -2161,8 +2515,24 @@ export class FirebaseService {
               deleteDoc(doc(db, 'partnerships', pId, 'seeds', seedId))
             ),
           ]);
+          this.clearPendingWrite(`authorities:${pId}:${authorityId}`);
+          for (const seedId of seedIdsToDelete) {
+            this.clearPendingWrite(`seeds:${pId}:${seedId}`);
+          }
         } catch (err) {
-          handleFirestoreError(err, OperationType.DELETE, aPath);
+          if (this.isQuotaError(err)) {
+            this.pauseFirestoreWrites();
+            this.setPendingWrite(`authorities:${pId}:${authorityId}`, 'delete');
+            for (const seed of matchingSeeds) {
+              this.setPendingWrite(`seeds:${pId}:${seed.id}`, 'delete');
+            }
+            return;
+          }
+          try {
+            handleFirestoreError(err, OperationType.DELETE, aPath);
+          } catch {
+            // Structured error logged
+          }
         }
       })();
     }
@@ -2196,11 +2566,13 @@ export class FirebaseService {
     // 0ms optimistic update
     this.pushToFallbackCloud('seeds', 'upsert', sanitized, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      void setDoc(doc(db, 'partnerships', pId, 'seeds', seedId), sanitized).catch((err) =>
-        handleFirestoreError(err, OperationType.WRITE, seedPath)
-      );
-    }
+    void this.executeFirestoreWrite(
+      OperationType.WRITE,
+      seedPath,
+      () => setDoc(doc(db, 'partnerships', pId, 'seeds', seedId), sanitized),
+      `seeds:${pId}:${seedId}`,
+      'upsert'
+    );
 
     return seedId;
   }
@@ -2212,12 +2584,14 @@ export class FirebaseService {
     // 0ms optimistic delete
     this.pushToFallbackCloud('seeds', 'delete', { id: seedId }, pId);
 
-    if (!this.isFallbackMode() && auth.currentUser) {
-      const seedPath = `partnerships/${pId}/seeds/${seedId}`;
-      void deleteDoc(doc(db, 'partnerships', pId, 'seeds', seedId)).catch((err) =>
-        handleFirestoreError(err, OperationType.DELETE, seedPath)
-      );
-    }
+    const seedPath = `partnerships/${pId}/seeds/${seedId}`;
+    void this.executeFirestoreWrite(
+      OperationType.DELETE,
+      seedPath,
+      () => deleteDoc(doc(db, 'partnerships', pId, 'seeds', seedId)),
+      `seeds:${pId}:${seedId}`,
+      'delete'
+    );
   }
 
   // --- Computed Analytics for Active Partnership ---
